@@ -1,4 +1,7 @@
-use std::collections::{BTreeMap, HashMap};
+use std::{
+    collections::{BTreeMap, HashMap},
+    error::Error,
+};
 
 type RowVersion = u32;
 
@@ -13,6 +16,10 @@ impl Table {
             name: n,
             columns: HashMap::new(),
         }
+    }
+
+    pub fn get_column(&self, column_name: String) -> Option<&Column> {
+        self.columns.get(&column_name)
     }
 }
 
