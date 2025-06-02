@@ -2,7 +2,6 @@ use std::{
     collections::{BTreeMap, HashMap},
     num::ParseIntError,
 };
-
 mod db;
 
 fn main() {
@@ -19,4 +18,6 @@ fn main() {
     } else {
         println!("no");
     }
+
+    let table = db::Table::new("Gaming".to_string());
 }

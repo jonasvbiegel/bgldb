@@ -1,4 +1,7 @@
-use std::collections::{BTreeMap, HashMap};
+use std::{
+    any::type_name,
+    collections::{BTreeMap, HashMap},
+};
 
 type RowVersion = u32;
 
@@ -8,9 +11,9 @@ pub struct Table {
 }
 
 impl Table {
-    pub fn new(n: String) -> Table {
+    pub fn new(name: String) -> Table {
         Table {
-            name: n,
+            name,
             columns: HashMap::new(),
         }
     }
