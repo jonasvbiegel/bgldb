@@ -1,20 +1,18 @@
 #import "src/project.typ": *
 
 #show: body => project(
-  title: "UCN Rapport",
-  subtitle: "UCN Rapport skrevet i Typst",
+  title: "Database i Rust",
+  subtitle: "Implementering og optimering af en Database i Rust",
   authors: (
-    "Jonas",
-    "Hans",
-    "Bob",
+    "Jonas Vittrup Biegel",
   ),
   supervisors: (
-    "Lars",
-    "Mis"
+    "Vejleder 1",
+    "Vejleder 2"
   ),
   theme: "Semesterprojekt",
-  projectperiod: "Forårssemestret",
-  group-number: "Gruppe 69",
+  projectperiod: "Efterårssemstret",
+  group-number: "Gruppe X",
   rev-number: "1",
   resume: [
     #lorem(100)
@@ -24,8 +22,11 @@
 )
 
 // main matter
-#include "chapters/introduktion.typ"
-#include "chapters/eksempler.typ"
+#include "chapters/indledning.typ"
+#include "chapters/redegoerelse.typ"
+#include "chapters/analyse.typ"
+#include "chapters/implementering.typ"
+#include "chapters/diskussion.typ"
 #include "chapters/konklusion.typ"
 
 // bibliography
