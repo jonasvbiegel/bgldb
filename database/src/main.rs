@@ -7,17 +7,31 @@ mod db;
 fn main() {
     let row_version: u32 = 1;
 
-    let mut col_string = db::Column::new(true, db::ColumnContent::Str(BTreeMap::new()));
-    let success_string = col_string.insert(row_version, db::Value::Str("hej".to_string()));
+    let mut table = db::Table::new("Gaming".to_string());
+    let col_string = db::Column::new(true, db::ColumnContent::Str(BTreeMap::new()));
 
-    let mut col_int = db::Column::new(false, db::ColumnContent::Int(BTreeMap::new()));
-    let success_int = col_int.insert(row_version, db::Value::Int(2));
+    table.add_column("StringColumn".to_string(), col_string);
 
-    if success_int {
-        println!("gaming");
-    } else {
-        println!("no");
+    table
+        .get_column_mut("StringColumn".to_string())
+        .unwrap()
+        .insert_row(row_version, db::Value::Str("hej".to_string()));
+
+    let rows = table
+        .get_column("StringColumn".to_string())
+        .expect("TROLL")
+        .get_rows();
+
+    match rows {
+        db::ColumnContent::Str(col) => {
+            for (key, _value) in col.iter() {
+                println!("{}", col.get(key).unwrap_or(&"empty".to_string()))
+            }
+        }
+        db::ColumnContent::Int(col) => {
+            for (key, _value) in col.iter() {
+                println!("{}", col.get(key).unwrap_or(&0))
+            }
+        }
     }
-
-    let table = db::Table::new("Gaming".to_string());
 }

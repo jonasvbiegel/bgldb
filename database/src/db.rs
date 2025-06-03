@@ -18,6 +18,10 @@ impl Table {
         }
     }
 
+    pub fn add_column(&mut self, name: String, column: Column) {
+        self.columns.insert(name, column);
+    }
+
     pub fn get_column_mut(&mut self, column_name: String) -> Option<&mut Column> {
         self.columns.get_mut(&column_name)
     }
@@ -46,8 +50,12 @@ impl Column {
         }
     }
 
-    pub fn insert(&mut self, rv: RowVersion, v: Value) -> bool {
+    pub fn insert_row(&mut self, rv: RowVersion, v: Value) -> bool {
         self.rows.insert(rv, v)
+    }
+
+    pub fn get_rows(&self) -> &ColumnContent {
+        &self.rows
     }
 }
 
