@@ -2,36 +2,29 @@ use std::{
     collections::{BTreeMap, HashMap},
     num::ParseIntError,
 };
+
+use db::TableBuilder;
 mod db;
 
 fn main() {
     let row_version: u32 = 1;
 
-    let mut table = db::Table::new("Gaming".to_string());
-    let col_string = db::Column::new(true, db::ColumnContent::Str(BTreeMap::new()));
+    let mut table = TableBuilder::new()
+        .str("name".to_string())
+        .int("age".to_string())
+        .build("People".to_string());
 
-    table.add_column("StringColumn".to_string(), col_string);
-
-    table
-        .get_column_mut("StringColumn".to_string())
+    let s1 = table
+        .get_column_mut("name".to_string())
         .unwrap()
-        .insert_row(row_version, db::Value::Str("hej".to_string()));
+        .insert_row(row_version, db::Value::Str("dam".to_string()));
 
-    let rows = table
-        .get_column("StringColumn".to_string())
-        .expect("TROLL")
-        .get_rows();
+    let s2 = table
+        .get_column_mut("age".to_string())
+        .unwrap()
+        .insert_row(row_version, db::Value::Int(13));
 
-    match rows {
-        db::ColumnContent::Str(col) => {
-            for (key, _value) in col.iter() {
-                println!("{}", col.get(key).unwrap_or(&"empty".to_string()))
-            }
-        }
-        db::ColumnContent::Int(col) => {
-            for (key, _value) in col.iter() {
-                println!("{}", col.get(key).unwrap_or(&0))
-            }
-        }
+    if s1 & s2 {
+        println!("gaming")
     }
 }

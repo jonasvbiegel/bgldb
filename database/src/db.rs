@@ -1,9 +1,43 @@
-use std::{
-    any::type_name,
-    collections::{BTreeMap, HashMap},
-};
+use std::collections::{BTreeMap, HashMap};
 
 type RowVersion = u32;
+
+pub struct TableBuilder {
+    columns: HashMap<String, Column>,
+}
+
+impl TableBuilder {
+    pub fn new() -> TableBuilder {
+        TableBuilder {
+            columns: HashMap::new(),
+        }
+    }
+
+    pub fn str(mut self, name: String) -> TableBuilder {
+        self.columns.insert(
+            name,
+            Column::new(false, ColumnContent::Str(BTreeMap::new())),
+        );
+
+        self
+    }
+
+    pub fn int(mut self, name: String) -> TableBuilder {
+        self.columns.insert(
+            name,
+            Column::new(false, ColumnContent::Int(BTreeMap::new())),
+        );
+
+        self
+    }
+
+    pub fn build(self, name: String) -> Table {
+        Table {
+            name,
+            columns: self.columns,
+        }
+    }
+}
 
 pub struct Table {
     name: String,
@@ -18,8 +52,8 @@ impl Table {
         }
     }
 
-    pub fn add_column(&mut self, name: String, column: Column) {
-        self.columns.insert(name, column);
+    pub fn get_columns(self) -> HashMap<String, Column> {
+        self.columns
     }
 
     pub fn get_column_mut(&mut self, column_name: String) -> Option<&mut Column> {
