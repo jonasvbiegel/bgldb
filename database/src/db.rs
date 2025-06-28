@@ -1,3 +1,4 @@
+use smallvec::SmallVec;
 use std::collections::{BTreeMap, HashMap};
 
 type RowVersion = u32;
@@ -39,6 +40,24 @@ impl TableBuilder {
     }
 }
 
+pub struct Database {
+    name: String,
+    tables: HashMap<String, Table>,
+}
+
+impl Database {
+    pub fn new(name: String) -> Database {
+        Database {
+            name,
+            tables: HashMap::new(),
+        }
+    }
+
+    pub fn insert_table(name: String) -> bool {
+        todo!()
+    }
+}
+
 pub struct Table {
     name: String,
     columns: HashMap<String, Column>,
@@ -62,6 +81,14 @@ impl Table {
 
     pub fn get_column(&self, column_name: String) -> Option<&Column> {
         self.columns.get(&column_name)
+    }
+
+    pub fn insert(items: SmallVec<[Value; 10]>) -> bool {
+        todo!()
+    }
+
+    pub fn print_table(self) -> bool {
+        todo!()
     }
 }
 
