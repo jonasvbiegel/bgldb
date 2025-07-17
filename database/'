@@ -2,7 +2,6 @@ use smallvec::SmallVec;
 use std::collections::{BTreeMap, HashMap};
 
 type RowVersion = u32;
-const MAX_COLUMNS: u16 = 1024;
 
 pub struct TableBuilder {
     columns: HashMap<String, Column>,
@@ -34,10 +33,6 @@ impl TableBuilder {
     }
 
     pub fn build(self, name: String) -> Table {
-        if self.columns.len() > MAX_COLUMNS as usize {
-            //throw error
-        }
-
         Table {
             name,
             columns: self.columns,
@@ -69,9 +64,12 @@ pub struct Table {
 }
 
 impl Table {
-    pub fn get_name(self) -> String {
-        self.name
-    }
+    // pub fn new(name: String) -> Table {
+    //     Table {
+    //         name,
+    //         columns: HashMap::new(),
+    //     }
+    // }
 
     pub fn get_columns(self) -> HashMap<String, Column> {
         self.columns
@@ -85,21 +83,8 @@ impl Table {
         self.columns.get(&column_name)
     }
 
-    pub fn insert(&mut self, items: SmallVec<[Value; MAX_COLUMNS as usize]>) -> bool {
-        let mut gaming = true;
-
-        for c in &mut self.columns.values_mut() {
-            for v in &items {
-                if c.insert_row(1, v.clone()) {
-                    gaming = true;
-                    continue;
-                }
-
-                gaming = false;
-            }
-        }
-
-        gaming
+    pub fn insert(items: SmallVec<[Value; 10]>) -> bool {
+        todo!()
     }
 
     pub fn print_table(self) -> bool {
@@ -135,7 +120,6 @@ impl Column {
     }
 }
 
-#[derive(Clone)]
 pub enum Value {
     Str(String),
     Int(i32),
