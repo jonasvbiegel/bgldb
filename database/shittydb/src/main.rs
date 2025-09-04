@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use simple_stopwatch::Stopwatch;
 use std::{
     fs::{self, File, OpenOptions, remove_file},
-    io::{BufRead, BufReader, Seek, Write},
+    io::{BufRead, Read, Write},
 };
 
 fn main() {
@@ -47,18 +47,6 @@ fn main() {
     sw.restart();
     let _: Vec<Person> = d.find_all().unwrap();
     println!("retrieved all elements in {}ms", sw.ms());
-
-    if let Some(p) = d.find::<Person>("name:\"Benchmark Man\"".to_string()) {
-        println!("{p:?}")
-    } else {
-        println!("bro not found");
-    }
-
-    if let Some(p) = d.find_multiple::<Person>("name:\"Benchmark Man\"".to_string()) {
-        println!("{}", p.len())
-    } else {
-        print!("stinky")
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -79,15 +67,14 @@ impl Person {
 }
 
 struct Database {
-    name: String,
+    path: String,
     file: File,
 }
 
-// impl<'a, T: Serialize + Deserialize<'a>> Database {
 impl Database {
     fn new(name: &str) -> Database {
         Database {
-            name: name.to_string(),
+            path: format!("./{name}"),
             file: OpenOptions::new()
                 .read(true)
                 .write(true)
@@ -110,7 +97,7 @@ impl Database {
     }
 
     fn find_all<T: Serialize + DeserializeOwned>(&mut self) -> Option<Vec<T>> {
-        let items: Vec<T> = fs::read(format!("./{}", self.name))
+        let items: Vec<T> = fs::read(&self.path)
             .unwrap()
             .lines()
             .map(|l| l.unwrap())
@@ -119,28 +106,45 @@ impl Database {
 
         if !items.is_empty() { Some(items) } else { None }
     }
+    //
+    // fn find<T: DeserializeOwned>(&mut self, constraint: String) -> Option<T> {
+    //     let _ = &self.file.rewind();
+    //     for s in BufReader::new(&self.file).lines() {
+    //         if s.as_ref().unwrap().contains(&constraint) {
+    //             return Some(ron::from_str(&s.unwrap()).unwrap());
+    //         }
+    //     }
+    //     None
+    // }
 
-    fn find<T: DeserializeOwned>(&mut self, constraint: String) -> Option<T> {
-        let _ = &self.file.rewind();
-        for s in BufReader::new(&self.file).lines() {
-            if s.as_ref().unwrap().contains(&constraint) {
-                return Some(ron::from_str(&s.unwrap()).unwrap());
-            }
-        }
-        None
-    }
-
-    fn find_multiple<T: DeserializeOwned>(&mut self, constraint: String) -> Option<Vec<T>> {
-        let items: Vec<T> = fs::read(format!("./{}", self.name))
+    fn filter<T: Serialize + DeserializeOwned, F>(&self, constraint: F) -> Option<Vec<T>>
+    where
+        F: FnMut(&T) -> bool,
+    {
+        let items: Vec<T> = fs::read(&self.path)
             .unwrap()
             .lines()
             .map(|l| l.unwrap())
-            .filter(|l| l.contains(&constraint))
             .map(|n| ron::from_str(&n).unwrap())
+            .filter(constraint)
             .collect();
 
         if !items.is_empty() { Some(items) } else { None }
     }
+
+    // fn find_multiple<T: DeserializeOwned>(&mut self, constraint: String) -> Option<Vec<T>> {
+    //     let items: Vec<T> = fs::read(format!("./{}", self.name))
+    //         .unwrap()
+    //         .lines()
+    //         .map(|l| l.unwrap())
+    //         .filter(|l| l.contains(&constraint))
+    //         .map(|n| ron::from_str(&n).unwrap())
+    //         .collect();
+    //
+    //     if !items.is_empty() { Some(items) } else { None }
+    // }
+
+    // for these, find 2 byte locaions and either change or delete from one byte to another
 
     fn update() {
         todo!()
