@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use simple_stopwatch::Stopwatch;
 use std::{
     fs::{self, File, OpenOptions, remove_file},
-    io::{BufRead, Read, Write},
+    io::{BufRead, Write},
 };
 
 fn main() {
@@ -106,16 +106,6 @@ impl Database {
 
         if !items.is_empty() { Some(items) } else { None }
     }
-    //
-    // fn find<T: DeserializeOwned>(&mut self, constraint: String) -> Option<T> {
-    //     let _ = &self.file.rewind();
-    //     for s in BufReader::new(&self.file).lines() {
-    //         if s.as_ref().unwrap().contains(&constraint) {
-    //             return Some(ron::from_str(&s.unwrap()).unwrap());
-    //         }
-    //     }
-    //     None
-    // }
 
     fn filter<T: Serialize + DeserializeOwned, F>(&self, constraint: F) -> Option<Vec<T>>
     where
@@ -132,19 +122,7 @@ impl Database {
         if !items.is_empty() { Some(items) } else { None }
     }
 
-    // fn find_multiple<T: DeserializeOwned>(&mut self, constraint: String) -> Option<Vec<T>> {
-    //     let items: Vec<T> = fs::read(format!("./{}", self.name))
-    //         .unwrap()
-    //         .lines()
-    //         .map(|l| l.unwrap())
-    //         .filter(|l| l.contains(&constraint))
-    //         .map(|n| ron::from_str(&n).unwrap())
-    //         .collect();
-    //
-    //     if !items.is_empty() { Some(items) } else { None }
-    // }
-
-    // for these, find 2 byte locaions and either change or delete from one byte to another
+    // for these, find 2 byte locations and either change or delete from one byte to another
 
     fn update() {
         todo!()
