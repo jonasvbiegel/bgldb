@@ -1,15 +1,18 @@
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use simple_stopwatch::Stopwatch;
 use std::{
-    fmt::format,
-    fs::{self, File},
-    io::{BufRead, Read, Write},
+    fs::{self, File, OpenOptions, remove_file},
+    io::{BufRead, BufReader, Seek, Write},
 };
 
 fn main() {
     let p = Person::new("Benchmark Man", "123123123", 100);
 
+    let _ = remove_file("./people");
+
     let mut d = Database::new("people");
+
+    d.insert(&p);
 
     let mut sw = Stopwatch::start_new();
     for i in 1..=1_000_000 {
@@ -44,6 +47,18 @@ fn main() {
     sw.restart();
     let _: Vec<Person> = d.find_all().unwrap();
     println!("retrieved all elements in {}ms", sw.ms());
+
+    if let Some(p) = d.find::<Person>("name:\"Benchmark Man\"".to_string()) {
+        println!("{p:?}")
+    } else {
+        println!("bro not found");
+    }
+
+    if let Some(p) = d.find_multiple::<Person>("name:\"Benchmark Man\"".to_string()) {
+        println!("{}", p.len())
+    } else {
+        print!("stinky")
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -73,13 +88,17 @@ impl Database {
     fn new(name: &str) -> Database {
         Database {
             name: name.to_string(),
-            file: File::create(format!("./{}", name)).unwrap(),
+            file: OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .truncate(false)
+                .open(format!("./{name}"))
+                .unwrap(),
         }
     }
 
     fn insert<'a, T: Serialize + Deserialize<'a>>(&mut self, item: &T) -> bool {
-        // todo!()
-
         let item_ron = ron::to_string(&item).unwrap();
         let success = self.file.write_all(item_ron.as_bytes()).is_ok();
         if success {
@@ -90,10 +109,6 @@ impl Database {
         }
     }
 
-    // fn find<'a, T: Serialize + Deserialize<'a>>(item: T) {
-    //     todo!()
-    // }
-    //
     fn find_all<T: Serialize + DeserializeOwned>(&mut self) -> Option<Vec<T>> {
         let items: Vec<T> = fs::read(format!("./{}", self.name))
             .unwrap()
@@ -105,7 +120,33 @@ impl Database {
         if !items.is_empty() { Some(items) } else { None }
     }
 
-    fn find<T: Serialize>(constraint: String) -> T {
+    fn find<T: DeserializeOwned>(&mut self, constraint: String) -> Option<T> {
+        let _ = &self.file.rewind();
+        for s in BufReader::new(&self.file).lines() {
+            if s.as_ref().unwrap().contains(&constraint) {
+                return Some(ron::from_str(&s.unwrap()).unwrap());
+            }
+        }
+        None
+    }
+
+    fn find_multiple<T: DeserializeOwned>(&mut self, constraint: String) -> Option<Vec<T>> {
+        let items: Vec<T> = fs::read(format!("./{}", self.name))
+            .unwrap()
+            .lines()
+            .map(|l| l.unwrap())
+            .filter(|l| l.contains(&constraint))
+            .map(|n| ron::from_str(&n).unwrap())
+            .collect();
+
+        if !items.is_empty() { Some(items) } else { None }
+    }
+
+    fn update() {
+        todo!()
+    }
+
+    fn delete() {
         todo!()
     }
 }
