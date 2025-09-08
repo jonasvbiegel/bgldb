@@ -1,5 +1,5 @@
+use after_test::cleanup;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use simple_stopwatch::Stopwatch;
 use std::{
     fs::{self, File, OpenOptions, remove_file},
     io::{BufRead, Write},
@@ -7,46 +7,26 @@ use std::{
 
 fn main() {
     let p = Person::new("Benchmark Man", "123123123", 100);
+    let p1 = Person::new("Missefar", "123123123", 100);
+    let p2 = Person::new("Jonas", "123123123", 100);
+    let p3 = Person::new("John", "addsd", 123123123);
 
     let _ = remove_file("./people");
 
     let mut d = Database::new("people");
 
     d.insert(&p);
+    d.insert(&p1);
+    d.insert(&p2);
+    d.insert(&p3);
 
-    let mut sw = Stopwatch::start_new();
-    for i in 1..=1_000_000 {
-        d.insert(&p);
-
-        match i {
-            1 => {
-                println!("inserted 1 element in {}ms", sw.ms())
-            }
-            10 => {
-                println!("inserted 10 elements in {}ms", sw.ms())
-            }
-            100 => {
-                println!("inserted 100 elements in {}ms", sw.ms())
-            }
-            1_000 => {
-                println!("inserted 1000 elements in {}ms", sw.ms())
-            }
-            10_000 => {
-                println!("inserted 10000 elements in {}ms", sw.ms())
-            }
-            100_000 => {
-                println!("inserted 100000 elements in {}ms", sw.ms())
-            }
-            1_000_000 => {
-                println!("inserted 1000000 elements in {}ms", sw.ms())
-            }
-            _ => {}
-        }
+    let lol = d.filter(|p: &Person| p.name == "Benchmark Man");
+    if let Some(n) = lol {
+        println!("{}", n.first().unwrap().name)
     }
 
-    sw.restart();
-    let _: Vec<Person> = d.find_all().unwrap();
-    println!("retrieved all elements in {}ms", sw.ms());
+    let items = d.remove(|x: &Person| x.name == "Jonas");
+    println!("{items}");
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -96,7 +76,7 @@ impl Database {
         }
     }
 
-    fn find_all<T: Serialize + DeserializeOwned>(&mut self) -> Option<Vec<T>> {
+    fn get_all<T: Serialize + DeserializeOwned>(&mut self) -> Option<Vec<T>> {
         let items: Vec<T> = fs::read(&self.path)
             .unwrap()
             .lines()
@@ -122,13 +102,80 @@ impl Database {
         if !items.is_empty() { Some(items) } else { None }
     }
 
-    // for these, find 2 byte locations and either change or delete from one byte to another
+    fn remove<T: Serialize + DeserializeOwned, F>(&mut self, mut constraint: F) -> usize
+    where
+        F: FnMut(&T) -> bool,
+    {
+        let items_count = fs::read_to_string(&self.path).unwrap().lines().count();
+
+        let items_string: Vec<String> = fs::read_to_string(&self.path)
+            .unwrap()
+            .lines()
+            .map(|x| ron::from_str(x).unwrap())
+            .filter(|x| !constraint(x))
+            .map(|x| ron::to_string(&x).unwrap())
+            .collect();
+
+        let items_deleted = items_count - items_string.len();
+
+        let mut file = OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .create(true)
+            .open(&self.path)
+            .unwrap();
+
+        for l in items_string {
+            let _ = file.write_all(l.as_bytes());
+            let _ = file.write(b"\n");
+        }
+        items_deleted
+    }
 
     fn update() {
         todo!()
     }
+}
 
-    fn delete() {
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    static NAME: &str = "test";
+
+    fn cleanup() {
+        let _ = remove_file(format!("./{NAME}"));
+    }
+
+    #[test]
+    fn insert() {
+        let p = Person::new("Jonas", "291220021234", 22);
+        let mut d = Database::new(NAME);
+        let success = d.insert(&p);
+        cleanup();
+        assert!(success);
+    }
+
+    #[test]
+    fn filter() {
+        let p1 = Person::new("Jonas", "1234", 22);
+        let p2 = Person::new("Hans", "4321", 22);
+        let mut d = Database::new(NAME);
+
+        d.insert(&p1);
+        d.insert(&p2);
+
+        let found = d.filter(|p: &Person| p.cpr == "4321");
+        assert!(found.is_some());
+    }
+
+    #[test]
+    fn remove() {
+        todo!()
+    }
+
+    #[test]
+    fn update() {
         todo!()
     }
 }
