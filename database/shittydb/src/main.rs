@@ -1,33 +1,10 @@
-use after_test::cleanup;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{
-    fs::{self, File, OpenOptions, remove_file},
-    io::{BufRead, Write},
+    fs::{self, File, OpenOptions},
+    io::{BufRead, BufWriter, Write},
 };
 
-fn main() {
-    let p = Person::new("Benchmark Man", "123123123", 100);
-    let p1 = Person::new("Missefar", "123123123", 100);
-    let p2 = Person::new("Jonas", "123123123", 100);
-    let p3 = Person::new("John", "addsd", 123123123);
-
-    let _ = remove_file("./people");
-
-    let mut d = Database::new("people");
-
-    d.insert(&p);
-    d.insert(&p1);
-    d.insert(&p2);
-    d.insert(&p3);
-
-    let lol = d.filter(|p: &Person| p.name == "Benchmark Man");
-    if let Some(n) = lol {
-        println!("{}", n.first().unwrap().name)
-    }
-
-    let items = d.remove(|x: &Person| x.name == "Jonas");
-    println!("{items}");
-}
+fn main() {}
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Person {
@@ -132,14 +109,51 @@ impl Database {
         items_deleted
     }
 
-    fn update() {
-        todo!()
+    fn update<T: Serialize + DeserializeOwned + std::fmt::Debug, F, U>(
+        &mut self,
+        mut constraint: F,
+        mut action: U,
+    ) -> bool
+    where
+        F: Clone + FnMut(&T) -> bool,
+        U: FnMut(&mut T),
+    {
+        let mut items: Vec<T> = fs::read(&self.path)
+            .unwrap()
+            .lines()
+            .map(|l| l.unwrap())
+            .map(|x| ron::from_str(&x).unwrap())
+            .collect();
+
+        for item in &mut items {
+            if constraint(item) {
+                action(item)
+            }
+        }
+
+        let items: Vec<String> = items.iter().map(|x| ron::to_string(&x).unwrap()).collect();
+
+        let new_file = OpenOptions::new()
+            .truncate(true)
+            .write(true)
+            .open(&self.path);
+
+        let mut writer = BufWriter::new(new_file.unwrap());
+
+        for item in items {
+            let success = writeln!(writer, "{item}");
+            if success.is_err() {
+                return false;
+            }
+        }
+        true
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs::remove_file;
 
     static NAME: &str = "test";
 
@@ -152,8 +166,8 @@ mod tests {
         let p = Person::new("Jonas", "291220021234", 22);
         let mut d = Database::new(NAME);
         let success = d.insert(&p);
-        cleanup();
         assert!(success);
+        cleanup();
     }
 
     #[test]
@@ -167,15 +181,52 @@ mod tests {
 
         let found = d.filter(|p: &Person| p.cpr == "4321");
         assert!(found.is_some());
+        cleanup();
     }
 
     #[test]
     fn remove() {
-        todo!()
+        let p1 = Person::new("Jonas", "1234", 22);
+        let p2 = Person::new("Hans", "4321", 22);
+        let mut d = Database::new(NAME);
+
+        d.insert(&p1);
+        d.insert(&p2);
+
+        let rows_deleted = d.remove(|x: &Person| x.cpr == "1234");
+        assert!(rows_deleted == 1);
+        cleanup();
     }
 
     #[test]
     fn update() {
-        todo!()
+        let p1 = Person::new("Jonas", "1234", 22);
+        let p2 = Person::new("Hans", "4321", 22);
+        let mut d = Database::new(NAME);
+        d.insert(&p1);
+        d.insert(&p2);
+
+        let success = d.update(
+            |x: &Person| x.name == "Jonas",
+            |x: &mut Person| x.name = "John".to_string(),
+        );
+
+        assert!(success);
+        assert_ne!(
+            p1.name,
+            d.filter(|x: &Person| x.cpr == "1234")
+                .unwrap()
+                .first()
+                .unwrap()
+                .name
+        );
+        assert_eq!(
+            p2.name,
+            d.filter(|x: &Person| x.cpr == "4321")
+                .unwrap()
+                .first()
+                .unwrap()
+                .name
+        );
     }
 }
