@@ -9,10 +9,15 @@
 
 // main matter
 #include "chapters/indledning.typ"
-#include "chapters/redegoerelse.typ"
+#include "chapters/foranalyse.typ"
+#include "chapters/kravsspecifikation.typ"
+#include "chapters/problemformulering.typ"
+#include "chapters/metode.typ"
 #include "chapters/analyse.typ"
+#include "chapters/design.typ"
 #include "chapters/implementering.typ"
-#include "chapters/diskussion.typ"
+#include "chapters/test.typ"
+#include "chapters/overdragelse.typ"
 #include "chapters/konklusion.typ"
 
 // bibliography
