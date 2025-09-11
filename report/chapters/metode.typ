@@ -1,2 +1,3 @@
 = Metode(?)
-gaming
+- Iterativt
+- Først en MVP, derefter optimering herfra

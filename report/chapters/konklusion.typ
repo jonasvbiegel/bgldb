@@ -1,1 +1,2 @@
 = Konklusion
+Konkluder lortet
