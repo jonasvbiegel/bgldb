@@ -29,6 +29,7 @@ fn main() {
 struct Node<T> {
     keys: Vec<T>,
     children: Vec<Node<T>>,
+    next_leaf: Option<Box<Node<T>>>,
 }
 
 impl<T: std::fmt::Display> Node<T> {
@@ -36,6 +37,7 @@ impl<T: std::fmt::Display> Node<T> {
         Self {
             keys: Vec::with_capacity(max_children - 1),
             children: Vec::with_capacity(max_children),
+            next_leaf: None,
         }
     }
 
