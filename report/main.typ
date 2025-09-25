@@ -20,7 +20,5 @@
 #include "chapters/overdragelse.typ"
 #include "chapters/konklusion.typ"
 
-// bibliography
-
 // appendix
 // make a appendix file and include it here

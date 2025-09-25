@@ -1,4 +1,4 @@
-use std::iter::zip;
+use std::{iter::zip, ops::Index};
 
 fn main() {
     println!("gaming");
@@ -24,6 +24,10 @@ fn main() {
     root.children.push(n3);
 
     root.display();
+
+    println!("{}", root.search(1));
+    println!("{}", root.search(7));
+    println!("{}", root.search(11));
 }
 
 struct Node<T> {
@@ -32,7 +36,7 @@ struct Node<T> {
     next_leaf: Option<Box<Node<T>>>,
 }
 
-impl<T: std::fmt::Display> Node<T> {
+impl<T: std::fmt::Display + std::cmp::PartialOrd> Node<T> {
     fn new(max_children: usize) -> Self {
         Self {
             keys: Vec::with_capacity(max_children - 1),
@@ -56,6 +60,23 @@ impl<T: std::fmt::Display> Node<T> {
             }
             self.children.last().unwrap().display();
         }
+    }
+
+    fn search(&self, key: T) -> bool {
+        if let Some(n) = self.keys.iter().position(|x| *x >= key) {
+            if key == *self.keys.index(n) {
+                return true;
+            } else if !self.children.is_empty() {
+                return self.children.index(n).search(key);
+            }
+        } else if let Some(c) = self.children.last() {
+            return c.search(key);
+        }
+        false
+    }
+
+    fn split_child(&self) {
+        todo!()
     }
 }
 
