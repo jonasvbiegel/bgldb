@@ -1,5 +1,6 @@
 #import "@preview/hydra:0.6.1": hydra
 #import "@preview/zebraw:0.5.5": *
+#import "@preview/cetz:0.4.2"
 
 #let project(
   title: "Ingen titel", subtitle: "Ingen undertitel", authors: ("Forfatter 1", "Forfatter 2", "Forfatter 3",), supervisors: ("Vejleder 1", "Vejleder 2"), theme: "Tema", projectperiod: "Periode", group-number: "Gruppenummer", rev-number: 1, resume: lorem(100), characters: 0, body,
