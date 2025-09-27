@@ -122,8 +122,8 @@
   show heading.where(level: 3): it => { v(0.8 * body-size) + block(it, height: 1 * body-size, sticky: true) }
 
   show raw.where(block: true): set align(center)
-  show raw.where(block: true): set text(font: "Cascadia Code")
-  show raw: t => (text(font: "Cascadia Code", t))
+  show raw.where(block: true): set text(font: "Fira Code")
+  show raw: t => (text(font: "Fira Code", t))
 
   show raw.where(block: true): block.with(fill: luma(240), inset: 10pt, radius: 4pt)
 

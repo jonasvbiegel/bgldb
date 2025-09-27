@@ -1,7 +1,7 @@
 #import "src/project.typ": *
 
 #show: body => project(
-  title: "Database i Rust", subtitle: "Implementering og optimering af en Database i Rust", authors: ("Jonas Vittrup Biegel",), supervisors: ("Brian Hvarregaard",), theme: "Semesterprojekt", projectperiod: "Efterårssemstret", group-number: "Gruppe 9", rev-number: "1", resume: [
+  title: "Dokumentbaseret database", subtitle: "Implementering og optimering af en dokumentbaseret database", authors: ("Jonas Vittrup Biegel",), supervisors: ("Brian Hvarregaard",), theme: "Semesterprojekt", projectperiod: "Efterårssemstret", group-number: "Gruppe 9", rev-number: "1", resume: [
     #lorem(100)
   ], characters: 2083, // unfortunately i couldnt find a good way to this automatically
   body,

@@ -179,9 +179,58 @@ På @bplustree Kan et B+ Tree ses.
   },
 )
 
-#figure(rect(btree, inset: 15pt), caption: [Et eksempel på et B+ Tree]) <bplustree>
+#figure(
+  rect(btree, inset: 15pt), caption: [Et B+ Tree med værdierne fra 1 til 7],
+) <bplustree>
+
+Jeg finder information om B+ Tree fra @databaseinternals.
+
+== Læsning fra disk
+For at læse og skrive data fra og til disken, skal det data først ligge i
+hukommelsen af computeren. Hukommelsen læser disken i én "page" ad gangen,
+hvilket mindst er 4096 bytes på de fleste styresystemer @pagewikipedia . Dette
+betyder at ens kode skal optimeres ved kun at læse de data som der er relevante
+for den operation der bliver kørt mod databasen, én page ad gangen.
+
+- Side fra bogen hvor de snakker om pages
+- Hvorfor pages?
 
 == Programmering
+
+Mange databaser er i dag skrevet i programmeringssproget C. Dette sprog er "low-level",
+forstået som at man arbejder tæt med hardwaren af computeren. Dette er f.eks.
+ved at man selv skal allokere hukommelse dynamisk. Dette gør også at ting kan
+optimeres rigtig meget, da sproget ikke selv bruger en garbage-collector til at
+sørge for at der ikke er nogle memory fejl, og ikke håndtere det i runtime.
+
+En ulempe ved sproget er dog at man sagtens kan komme til at lave memory fejl.
+Dette kan gøres ved f.eks. ikke at kalde `free()` funktionen efter man har
+allokeret sin memory, hvilket gør at memoryen altid er i brug.
+
+Betragt de to funktioner i @mallocfunctions.
+
+#figure([
+```c
+void malloc_with_free() {
+    int *ptr = (int *)malloc(sizeof(int));
+    // do something with the pointer ...
+    free(ptr)
+}
+
+void malloc_without_free() {
+    int *ptr = (int *)malloc(sizeof(int));
+    // do something with the pointer, but dont free afterwards ...
+}
+```
+], caption: [2 funktioner i C der allokere memory]) <mallocfunctions>
+
+Disse to funktioner ser meget ens ud, men de har én stor forskel. `malloc_with_free()` sørger
+for at kalde `free()` på den pointer som der bliver returneret fra `malloc()`,
+hvilket gør at det stykke memory der er blevet reserveret af pointeren til sidst
+bliver frigivet så det kan bruges igen. `malloc_without_free()` frigiver ikke
+memoryen som pointeren bruger, hvilket vil sige at det memory er optaget indtil
+programmet er slut. Hvis man har et program der kalder funktionen nok gange, vil
+der til sidst ikke være mere memory tilbage, og man vil få en `StackOverFlow` fejl.
 
 - Databaser
 - Problemer i databaser (skrevet i C, C++, sikkerhed i memory)
