@@ -31,16 +31,18 @@ fn main() {
 }
 
 struct Node<T> {
+    order: usize,
     keys: Vec<T>,
     children: Vec<Node<T>>,
     next_leaf: Option<Box<Node<T>>>,
 }
 
 impl<T: std::fmt::Display + std::cmp::PartialOrd> Node<T> {
-    fn new(max_children: usize) -> Self {
+    fn new(order: usize) -> Self {
         Self {
-            keys: Vec::with_capacity(max_children - 1),
-            children: Vec::with_capacity(max_children),
+            order,
+            keys: Vec::with_capacity(order - 1),
+            children: Vec::with_capacity(order),
             next_leaf: None,
         }
     }
