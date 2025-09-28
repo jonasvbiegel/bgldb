@@ -127,6 +127,7 @@
 
   show raw.where(block: true): block.with(fill: luma(240), inset: 10pt, radius: 4pt)
 
+  show: zebraw.with(..zebraw-themes.zebra-reverse)
   show: t => zebraw(lang: false, block-width: 50pt, t)
 
   show math.equation: set text(14pt)

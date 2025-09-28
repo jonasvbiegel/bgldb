@@ -1,4 +1,5 @@
 #import "@preview/cetz:0.4.2"
+#import "@preview/zebraw:0.5.5": *
 
 = Foranalyse
 
@@ -196,6 +197,7 @@ for den operation der bliver kørt mod databasen, én page ad gangen.
 - Hvorfor pages?
 
 == Programmering
+#show: t => zebraw(lang: false, block-width: 50pt, indentation: 4, t)
 
 Mange databaser er i dag skrevet i programmeringssproget C. Dette sprog er "low-level",
 forstået som at man arbejder tæt med hardwaren af computeren. Dette er f.eks.
@@ -203,34 +205,96 @@ ved at man selv skal allokere hukommelse dynamisk. Dette gør også at ting kan
 optimeres rigtig meget, da sproget ikke selv bruger en garbage-collector til at
 sørge for at der ikke er nogle memory fejl, og ikke håndtere det i runtime.
 
-En ulempe ved sproget er dog at man sagtens kan komme til at lave memory fejl.
-Dette kan gøres ved f.eks. ikke at kalde `free()` funktionen efter man har
-allokeret sin memory, hvilket gør at memoryen altid er i brug.
+De mest hyppige memory bugs vil nu beskrives, og noget kode der udløser fejlen
+vil vises.
 
-Betragt de to funktioner i @mallocfunctions.
+=== Memory Leak
+Koden i @mallocfunctions viser et eksempel på et memory leak.
 
 #figure([
 ```c
-void malloc_with_free() {
-    int *ptr = (int *)malloc(sizeof(int));
-    // do something with the pointer ...
-    free(ptr)
+int main() {
+    while(true) {
+        leak_memory(100);
+    }
+
+    return 0;
 }
 
-void malloc_without_free() {
-    int *ptr = (int *)malloc(sizeof(int));
-    // do something with the pointer, but dont free afterwards ...
+void leak_memory(int i) {
+    int *ptr = malloc(sizeof(int));
+    *ptr = i;
+    return;
 }
 ```
-], caption: [2 funktioner i C der allokere memory]) <mallocfunctions>
+], caption: [En funktion i C der allokerer memory kontinuerligt]) <mallocfunctions>
 
-Disse to funktioner ser meget ens ud, men de har én stor forskel. `malloc_with_free()` sørger
-for at kalde `free()` på den pointer som der bliver returneret fra `malloc()`,
-hvilket gør at det stykke memory der er blevet reserveret af pointeren til sidst
-bliver frigivet så det kan bruges igen. `malloc_without_free()` frigiver ikke
-memoryen som pointeren bruger, hvilket vil sige at det memory er optaget indtil
-programmet er slut. Hvis man har et program der kalder funktionen nok gange, vil
-der til sidst ikke være mere memory tilbage, og man vil få en `StackOverFlow` fejl.
+#pagebreak()
+=== Use-After-Free
+
+```c
+int main() {
+    int *ptr = malloc(sizeof(int));
+    *ptr = 10;
+    free(ptr)
+    do_something(*ptr);
+    return 0;
+}
+
+void do_something(int *ptr) {
+    // does something with the pointer ...
+}
+
+```
+
+#pagebreak()
+=== Buffer Overflow
+
+```c
+int main() {
+    #include <stdio.h>
+
+    char buf[64] // create a buffer that holds 64 characters
+    gets(buf); // get input from user
+
+    return 0;
+}
+```
+
+#pagebreak()
+=== Data Race
+
+```c
+#include <pthread.h>
+
+int main() {
+    // define 2 threads
+    pthread_t thread1;
+    pthread_t thread2;
+
+    int shared_value = 0;
+
+    // make the threads do some operation on a shared value
+    pthread_create(&thread1, NULL, foo, &shared_value);
+    pthread_create(&thread2, NULL, bar, &shared_value);
+
+    // wait for threads to finish
+    pthread_join(thread1, NULL);
+    pthread_join(thread2, NULL);
+
+    return 0;
+}
+
+void* foo(void* arg) {
+    // read and write to and from arg ...
+}
+
+void* bar(void* arg) {
+    // read and write something else to and from arg ...
+}
+```
+
+=== Ved ikke lige med det her... xd
 
 - Databaser
 - Problemer i databaser (skrevet i C, C++, sikkerhed i memory)

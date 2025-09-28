@@ -4,18 +4,11 @@ use std::{
 };
 
 fn main() {
-    let f_name = Field::new("name".to_string(), DataType::String("Jonas".to_string()));
-    let f_age = Field::new("age".to_string(), DataType::I32(22));
-    let f_float = Field::new("float".to_string(), DataType::Float(-1.0));
-
     let mut file = File::create("./lol").unwrap();
-    let _ = file.write_all(&f_name.to_bytes());
-    let _ = file.write_all(&f_age.to_bytes());
-    let _ = file.write_all(&f_float.to_bytes());
+}
 
-    let _ = &f_name.to_bytes().iter().for_each(|b| println!("{b}"));
-    println!();
-    let _ = &f_float.to_bytes().iter().for_each(|b| println!("{b}"));
+struct Store {
+    documents: Vec<Document>,
 }
 
 struct Document {
@@ -32,16 +25,14 @@ impl Field {
         Self { name, data }
     }
 
-    fn get_size(&self) -> u8 {
-        todo!()
-    }
-
-    fn to_bytes(&self) -> Vec<u8> {
+    fn to_bytes(&self) -> Option<Vec<u8>> {
         let mut bytes = Vec::<u8>::new();
 
         // if the size of the field name is under 256 in len, push the len in bytes
         if self.name.len() <= 0xFFusize {
             bytes.push(*self.name.len().to_le_bytes().first().unwrap());
+        } else {
+            return None;
         }
 
         // push the name as chars in bytes
@@ -64,14 +55,14 @@ impl Field {
                 bytes.push(0x02u8);
                 i.to_le_bytes().iter().for_each(|b| bytes.push(*b));
             }
-            // if float push the float
+            // if float push the float, will also be 4 bytes
             DataType::Float(f) => {
                 bytes.push(0x03u8);
                 f.to_le_bytes().iter().for_each(|b| bytes.push(*b));
             }
         }
 
-        bytes
+        Some(bytes)
     }
 }
 
