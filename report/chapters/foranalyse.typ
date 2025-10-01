@@ -209,7 +209,11 @@ De mest hyppige memory bugs vil nu beskrives, og noget kode der udløser fejlen
 vil vises.
 
 === Memory Leak
-Koden i @mallocfunctions viser et eksempel på et memory leak.
+Et memory leak opstår når der bliver allokeret memory uden at det bagefter
+bliver frigivet. Dette kan gøres ved at lave en pointer og så give den en værdi.
+Dette vil medføre at det memory er optaget indtil slutningen af programmet.
+
+Koden i @mallocfunctions viser et meget overdrevet eksempel på et memory leak.
 
 #figure([
 ```c
@@ -229,41 +233,49 @@ void leak_memory(int i) {
 ```
 ], caption: [En funktion i C der allokerer memory kontinuerligt]) <mallocfunctions>
 
-#pagebreak()
+Hvis man er meget uopmærksom på sine pointers og ikke holder styr på at frigive
+dem efter de er brugt, ender det ofte i et memory leak. Disse kan ende med at
+være dyre, da de vil have en virkning på ydeevne, og i værste tilfælde vil
+crashe programmet.
+
 === Use-After-Free
 
+#figure([
 ```c
-int main() {
-    int *ptr = malloc(sizeof(int));
-    *ptr = 10;
-    free(ptr)
-    do_something(*ptr);
-    return 0;
-}
+              int main() {
+                  int *ptr = malloc(sizeof(int));
+                  *ptr = 10;
+                  free(ptr);
+                  do_something(ptr);
+                  return 0;
+              }
 
-void do_something(int *ptr) {
-    // does something with the pointer ...
-}
-
-```
+              void do_something(int *ptr) {
+                  // does something with the pointer ...
+              }
+              ```
+], caption: [Et program der bruger memory efter det er frigivet])
 
 #pagebreak()
 === Buffer Overflow
 
+#figure([
 ```c
-int main() {
-    #include <stdio.h>
+#include <stdio.h>
 
+int main() {
     char buf[64] // create a buffer that holds 64 characters
     gets(buf); // get input from user
 
     return 0;
 }
 ```
+], caption: [Et program der kan lave et buffer overflow])
 
 #pagebreak()
 === Data Race
 
+#figure([
 ```c
 #include <pthread.h>
 
@@ -286,16 +298,33 @@ int main() {
 }
 
 void* foo(void* arg) {
-    // read and write to and from arg ...
+    // read and write continually to and from arg ...
 }
 
 void* bar(void* arg) {
-    // read and write something else to and from arg ...
+    // read and write something else continually to and from arg ...
 }
 ```
+], caption: [Et program der viser et data race])
 
-=== Ved ikke lige med det her... xd
+#pagebreak()
+=== Noter
 
 - Databaser
 - Problemer i databaser (skrevet i C, C++, sikkerhed i memory)
+  - SQL Server (C og C++)
+  - PostgreSQL (C og C++)
+  - MySQL (C og C++),
+  - MongoDB (C, C++, JavaScript og Python(?) )
+  - SQLite (C)
 - Strukturen af databaser måske?
+
+```rust
+fn main() {
+    println!("lol");
+
+    for i in 0..100 {
+      println!("lol {i}")
+    }
+}
+```

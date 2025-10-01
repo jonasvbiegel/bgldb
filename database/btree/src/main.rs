@@ -1,33 +1,33 @@
 use std::{iter::zip, ops::Index};
 
 fn main() {
-    println!("gaming");
-    let mut n1 = Node::<i32>::new(4);
-    n1.keys.push(1);
-    n1.keys.push(2);
-
-    let mut n2 = Node::<i32>::new(4);
-    n2.keys.push(3);
-    n2.keys.push(4);
-
-    let mut n3 = Node::<i32>::new(4);
-    n3.keys.push(5);
-    n3.keys.push(6);
-    n3.keys.push(7);
-
-    let mut root = Node::<i32>::new(4);
-
-    root.keys.push(3);
-    root.keys.push(5);
-    root.children.push(n1);
-    root.children.push(n2);
-    root.children.push(n3);
-
-    root.display();
-
-    println!("{}", root.search(1));
-    println!("{}", root.search(7));
-    println!("{}", root.search(11));
+    // println!("gaming");
+    // let mut n1 = Node::<i32>::new(4);
+    // n1.keys.push(1);
+    // n1.keys.push(2);
+    //
+    // let mut n2 = Node::<i32>::new(4);
+    // n2.keys.push(3);
+    // n2.keys.push(4);
+    //
+    // let mut n3 = Node::<i32>::new(4);
+    // n3.keys.push(5);
+    // n3.keys.push(6);
+    // n3.keys.push(7);
+    //
+    // let mut root = Node::<i32>::new(4);
+    //
+    // root.keys.push(3);
+    // root.keys.push(5);
+    // root.children.push(n1);
+    // root.children.push(n2);
+    // root.children.push(n3);
+    //
+    // root.display();
+    //
+    // println!("{}", root.search(1));
+    // println!("{}", root.search(7));
+    // println!("{}", root.search(11));
 }
 
 struct Node<T> {
@@ -47,6 +47,7 @@ impl<T: std::fmt::Display + std::cmp::PartialOrd> Node<T> {
         }
     }
 
+    // display the tree
     fn display(&self) {
         if self.children.is_empty() {
             for k in &self.keys {
@@ -64,6 +65,7 @@ impl<T: std::fmt::Display + std::cmp::PartialOrd> Node<T> {
         }
     }
 
+    // search for a key, if key exists return true
     fn search(&self, key: T) -> bool {
         if let Some(n) = self.keys.iter().position(|x| *x >= key) {
             if key == *self.keys.index(n) {
@@ -77,7 +79,55 @@ impl<T: std::fmt::Display + std::cmp::PartialOrd> Node<T> {
         false
     }
 
+    // --------------------
+    // | INSERT FUNCTIONS |
+    // --------------------
     fn split_child(&self) {
+        todo!()
+    }
+
+    fn insert_non_full(&self) {
+        todo!()
+    }
+
+    fn insert(&self) {
+        todo!()
+    }
+
+    // --------------------
+    // | DELETE FUNCTIONS |
+    // --------------------
+    fn delete_key_helper(&self, key: T) {
+        todo!()
+    }
+
+    fn find_key(&self, key: T) -> Option<i32> {
+        // find index of key in node, maybe useless? idk
+        todo!()
+    }
+
+    // CHECK IF INDICES OF THESE FUNCTIONS ARE ACTUALLY NEEDED LOL
+    fn remove_from_leaf(&self, index: i32) {
+        todo!()
+    }
+
+    fn get_predecessor(&self) -> Option<T> {
+        todo!()
+    }
+
+    fn fill(&self, index: i32) {
+        todo!()
+    }
+
+    fn borrow_from_prev(&self, index: i32) {
+        todo!()
+    }
+
+    fn borrow_from_next(&self, index: i32) {
+        todo!()
+    }
+
+    fn merge(&self, index: i32) {
         todo!()
     }
 }

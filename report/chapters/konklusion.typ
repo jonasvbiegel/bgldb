@@ -1,2 +1,2 @@
 = Konklusion
-Konkluder lortet
+Konklusion af rapporten

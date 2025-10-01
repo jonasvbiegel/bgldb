@@ -7,10 +7,6 @@ fn main() {
     let mut file = File::create("./lol").unwrap();
 }
 
-struct Store {
-    documents: Vec<Document>,
-}
-
 struct Document {
     fields: Vec<Field>,
 }
@@ -51,12 +47,12 @@ impl Field {
                 }
             }
             // if i32 push it, will always be 4 bytes (for reading)
-            DataType::I32(i) => {
+            DataType::Int32(i) => {
                 bytes.push(0x02u8);
                 i.to_le_bytes().iter().for_each(|b| bytes.push(*b));
             }
             // if float push the float, will also be 4 bytes
-            DataType::Float(f) => {
+            DataType::Float32(f) => {
                 bytes.push(0x03u8);
                 f.to_le_bytes().iter().for_each(|b| bytes.push(*b));
             }
@@ -68,6 +64,6 @@ impl Field {
 
 enum DataType {
     String(String), //1
-    I32(i32),       //2
-    Float(f32),     //3
+    Int32(i32),     //2
+    Float32(f32),   //3
 }
