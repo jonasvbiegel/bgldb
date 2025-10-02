@@ -48,52 +48,94 @@ er derfor de bliver brugt. @whatisdatabase
 
 == Database struktur
 At gemme, læse og skrive så store mængder data kan være svært og kræver en god
-datastruktur. Disse strukturer er typisk baseret på en binær træstruktur. Den
-normale binære træstruktur har dog den ulempe at den ikke er særlig skalerbar,
-og at den i længden kan blive langsom i forhold til andre træstrukturer. Der er
-derfor blevet udviklet andre former for træstrukturer som er bedre til at gemme
-på store mængder data, og som skalere bedre i forhold til læse- og
-skrivehastighed. Disse vil nu beskrives yderligere.
+datastruktur. Disse strukturer er typisk baseret på en binær træstruktur. Det
+normale binære søgtræ har dog den ulempe at den ikke er særlig skalerbar, da den
+i længden kan blive langsom i forhold til andre træstrukturer. Der er derfor
+blevet udviklet andre former for træstrukturer som skalere bedre i forhold til
+læse- og skrivehastighed. Det normale binære søgetræ vil nu analyseres.
 
-=== B-tree
-På @btree kan et binært træ ses.
+=== Binary Search Tree
+På @btree kan et binært søgetræ ses.
 
 #let btree = cetz.canvas({
   import cetz.draw: *
 
-  circle((3, 4), name: "7", radius: 0.5);
+  circle((3, 4), name: "7", radius: 0.5)
   content((name: "7"), [7])
 
-  circle((1, 2), name: "5", radius: 0.5);
+  circle((1, 2), name: "5", radius: 0.5)
   content((name: "5"), [5])
   line("7", "5")
 
-  circle((5, 2), name: "11", radius: 0.5);
+  circle((5, 2), name: "11", radius: 0.5)
   content((name: "11"), [11])
   line("7", "11")
 
-  circle((2, 0), name: "6", radius: 0.5);
+  circle((2, 0), name: "6", radius: 0.5)
   content((name: "6"), [6])
   line("5", "6")
 
-  circle((0, 0), name: "4", radius: 0.5);
+  circle((0, 0), name: "4", radius: 0.5)
   content((name: "4"), [4])
   line("5", "4")
 
-  circle((6, 0), name: "13", radius: 0.5);
+  circle((6, 0), name: "13", radius: 0.5)
   content((name: "13"), [13])
   line("11", "13")
 
-  circle((4, 0), name: "9", radius: 0.5);
+  circle((4, 0), name: "9", radius: 0.5)
   content((name: "9"), [9])
   line("11", "9")
+
+  circle((5, -2), name: "10", radius: 0.5)
+  content((name: "10"), [10])
+  line("9", "10")
+
+  circle((3, -2), name: "8", radius: 0.5)
+  content((name: "8"), [8])
+  line("9", "8")
 })
 
 #figure(
-  rect(inset: 15pt, [#btree]), caption: "Binært træ med værdierne 4, 5, 6, 7, 9, 11, 13",
+  rect(inset: 10pt, [#btree]), caption: "Binært søgetræ med værdierne 4, 5, 6, 7, 8, 9, 10, 11 og 13",
 ) <btree>
 
-=== B+ Tree
+Det binære søgetræ er en træstruktur hvor alle keys er større end deres venstre
+undertræ og mindre end deres højre undertræ. Dette gør at den har relativt
+hurtige insert, update og removal hastigheder end f.eks. en singly-linked list.
+Tidskompleksiteten af et binært søgetræ kan ses på @bst-timecomplexity.
+
+#figure(
+  scale(
+    90%, reflow: true, table(
+      columns: (auto, auto, auto), align: horizon, inset: 10pt, table.header(
+        [*Operation*], [*Average*], [*Worst Case*], [*Search*], [$O(h)$], [$O(n)$], [*Insert*], [$O(h)$], [$O(n)$], [*Delete*], [$O(h)$], [$O(n)$],
+      ),
+    ),
+  ), caption: [Tidskompleksiteten af et BST i Big O notation, hvor _n_ er antallet af noder i
+    træet og _h_ er højden af træet],
+) <bst-timecomplexity>
+
+Det kan ses i ovenstående tabel at den gennemsnitlige tidskompleksitet af et
+binært søgetræ er $O(h)$, altså højden af træet. Dette er hurtigere end en
+usorteret liste, hvilket gør at det er bedre at køre operationer mod. Dog har
+det binøre søgetræ den ulempe at der er mulighed for at tidskompleksiteten kan
+nå $O(n)$ hvis det ikke bliver balanceret. Dette skyldes at et ubalancaret
+binært søgetræ kan være "skævt", hvilket vil sige at det enten kun går til
+venstre eller højre.
+
+På grund af det normale binære søgetræs dårlige tidskompleksiteter er derfor
+fundet bedre metoder at lave træstrukturer på kaldet selvbalancerede træer.
+Disse vil nu analyseres.
+
+// Dog kan det også ses at det i værste tilfælde kan// have en tidskompleksitet på $O(n)$, hvilket er på niveau med en usorteret liste.
+// Dette er ikke optimalt, da en database gerne skal kunne køre operationer i en
+// meget hurtig hastighed.
+//
+=== Self-balanced Binary Search Tree
+
+*Kig i bogen for det her*
+
 På @bplustree Kan et B+ Tree ses.
 
 #let btree = cetz.canvas(
@@ -189,24 +231,23 @@ Jeg finder information om B+ Tree fra @databaseinternals.
 == Læsning fra disk
 For at læse og skrive data fra og til disken, skal det data først ligge i
 hukommelsen af computeren. Hukommelsen læser disken i én "page" ad gangen,
-hvilket mindst er 4096 bytes på de fleste styresystemer @pagewikipedia . Dette
-betyder at ens kode skal optimeres ved kun at læse de data som der er relevante
-for den operation der bliver kørt mod databasen, én page ad gangen.
+hvilket er 4096 bytes på de fleste styresystemer @pagewikipedia . Dette betyder
+at ens kode skal optimeres ved kun at læse de data som der er relevante for den
+operation der bliver kørt mod databasen, én page ad gangen.
 
 - Side fra bogen hvor de snakker om pages
 - Hvorfor pages?
 
 == Programmering
-#show: t => zebraw(lang: false, block-width: 50pt, indentation: 4, t)
+Mange databaser er i dag skrevet i programmeringssprogene C og C++. Disse sprog
+er "low-level", forstået som at man arbejder tæt med hardwaren af computeren.
+Dette er f.eks. ved at man selv skal allokere hukommelse dynamisk. Dette gør
+også at ting kan optimeres rigtig meget, da sprogene ikke selv bruger en
+garbage-collector til at sørge for at der ikke er nogle memory fejl, og ikke
+håndtere det i runtime.
 
-Mange databaser er i dag skrevet i programmeringssproget C. Dette sprog er "low-level",
-forstået som at man arbejder tæt med hardwaren af computeren. Dette er f.eks.
-ved at man selv skal allokere hukommelse dynamisk. Dette gør også at ting kan
-optimeres rigtig meget, da sproget ikke selv bruger en garbage-collector til at
-sørge for at der ikke er nogle memory fejl, og ikke håndtere det i runtime.
-
-De mest hyppige memory bugs vil nu beskrives, og noget kode der udløser fejlen
-vil vises.
+De mest hyppige memory bugs vil nu beskrives, og nogle kodeeksempler der udløser
+fejlen vil vises. Kodeeksemplerne vil blive skrevet i C.
 
 === Memory Leak
 Et memory leak opstår når der bliver allokeret memory uden at det bagefter

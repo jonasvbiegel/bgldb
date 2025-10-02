@@ -106,6 +106,8 @@
     block(it)
   }
 
+  show figure.where(kind: table): set figure.caption(position: top)
+
   show figure: f => { [#v(5pt) #f #v(5pt) ] }
 
   set par(first-line-indent: 0em, spacing: 1em, justify: true)
@@ -128,7 +130,7 @@
   show raw.where(block: true): block.with(fill: luma(240), inset: 10pt, radius: 4pt)
 
   show: zebraw.with(..zebraw-themes.zebra-reverse)
-  show: t => zebraw(lang: false, block-width: 50pt, t)
+  show: t => zebraw(lang: false, block-width: 50pt, indentation: 4, t)
 
   show math.equation: set text(14pt)
 
