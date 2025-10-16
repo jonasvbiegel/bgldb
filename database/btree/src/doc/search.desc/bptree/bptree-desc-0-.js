@@ -1,1 +1,0 @@
-searchState.loadedDescShard("bptree", 0, "A tree structure with multiple keys and children for each …\nReturns the argument unchanged.\nInserts a value <code>T</code> into the tree.\nCalls <code>U::from(self)</code>.\nCreates and returns a new BPTree with type T. <code>Order</code> is the …")
