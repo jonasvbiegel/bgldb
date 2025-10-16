@@ -10,7 +10,7 @@
 // main matter
 #include "chapters/indledning.typ"
 #include "chapters/foranalyse.typ"
-#include "chapters/kravsspecifikation.typ"
+// #include "chapters/kravsspecifikation.typ"
 #include "chapters/problemformulering.typ"
 #include "chapters/metode.typ"
 #include "chapters/analyse.typ"
