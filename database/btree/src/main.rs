@@ -5,7 +5,7 @@ use crate::bptree::BPTree;
 fn main() {
     let mut bptree = BPTree::<i32>::new(4);
 
-    for i in 1..=20 {
+    for i in 1..=10 {
         bptree.insert(i);
     }
 

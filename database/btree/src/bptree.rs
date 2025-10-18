@@ -22,18 +22,11 @@ where
 
     /// Inserts a value `T` into the tree.
     pub fn insert(&mut self, value: T) {
-        println!("inserting {value:#?}");
         self.root.insert(&value);
 
         if self.root.keys.len() > self.order - 1 {
-            println!("ROOT SPLIT");
-            println!("root too big, splitting {:#?}", self.root);
             let mut new_root: Node<T> = Node::new(self.order);
             let mut child = self.root.split();
-            println!();
-            println!("AFTER ROOT SPLIT");
-            println!("left child after split {:#?}", self.root);
-            println!("right child after split {child:#?}");
 
             if child.children.is_empty() {
                 new_root.keys.push(child.keys.index(0).clone());
@@ -43,8 +36,6 @@ where
 
             new_root.children.push(self.root.clone());
             new_root.children.push(child);
-
-            println!("new root keys after split {:#?}", new_root.keys);
 
             self.root = new_root;
         }
@@ -76,6 +67,8 @@ where
         }
     }
 
+    /// Searches for a node with value T in the children of `self`. Returns `true` if a node with value T is
+    /// found.
     fn search(&self, value: T) -> bool {
         if let Some(i) = self.keys.iter().position(|x| *x >= value) {
             if *self.keys.index(i) == value {
@@ -119,8 +112,12 @@ where
             }
 
             if c.keys.len() > c.order - 1 {
-                let n = c.split();
-                self.keys.push(n.keys.first().unwrap().clone());
+                let mut n = c.split();
+                if !n.children.is_empty() {
+                    self.keys.push(n.keys.remove(0));
+                } else {
+                    self.keys.push(n.keys.first().unwrap().clone());
+                }
                 self.children.push(n);
             }
         } else {
@@ -143,14 +140,10 @@ where
 
     /// Splits the child, returning the child created after the split
     fn split(&mut self) -> Node<T> {
-        println!("SPLIT");
-        println!("-----------------------");
-        println!("splitting {self:#?}");
         let mut new_child: Node<T> = Node::new(self.order);
 
         // insert the rightmost keys of the node into the new node and sort
         for _ in self.keys.len() / 2..self.keys.len() {
-            println!("split: pushing key {}", self.keys.last().unwrap());
             new_child.keys.push(self.keys.pop().unwrap());
         }
         new_child.keys.reverse();
@@ -158,18 +151,11 @@ where
         // if node is not a leaf, do the same for the children
         if !self.children.is_empty() {
             for _ in self.children.len().div_ceil(2)..self.children.len() {
-                println!("split: pushing child {:#?}", self.children.last().unwrap());
                 new_child.children.push(self.children.pop().unwrap());
             }
             new_child.children.reverse();
         }
 
-        println!("AFTER SPLIT");
-        println!("OG NODE");
-        println!("{self:#?}");
-        println!("NEW CHILD");
-        println!("{new_child:#?}");
-        println!("-----------------------");
         new_child
     }
 
