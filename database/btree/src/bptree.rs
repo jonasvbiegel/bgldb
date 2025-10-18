@@ -67,33 +67,6 @@ where
         }
     }
 
-    /// Searches for a node with value T in the children of `self`. Returns `true` if a node with value T is
-    /// found.
-    fn search(&self, value: T) -> bool {
-        if let Some(i) = self.keys.iter().position(|x| *x >= value) {
-            if *self.keys.index(i) == value {
-                return true;
-            } else if !self.children.is_empty() {
-                return self.children.index(i).search(value);
-            }
-        } else if !self.children.is_empty() {
-            return self.children.last().unwrap().search(value);
-        }
-        false
-    }
-
-    // -----------------
-    // | GET FUNCTIONS |
-    // -----------------
-
-    fn get(&self, value: T) -> &Node<T> {
-        todo!()
-    }
-
-    fn get_mut(&mut self, value: T) -> &mut Node<T> {
-        todo!()
-    }
-
     // --------------------
     // | INSERT FUNCTIONS |
     // --------------------
@@ -157,6 +130,37 @@ where
         }
 
         new_child
+    }
+
+    // -------------------
+    // | SEARCH FUNCTION |
+    // -------------------
+
+    /// Searches for a node with value T in the children of `self`. Returns `true` if a node with value T is
+    /// found.
+    fn search(&self, value: T) -> bool {
+        if let Some(i) = self.keys.iter().position(|x| *x >= value) {
+            if *self.keys.index(i) == value {
+                return true;
+            } else if !self.children.is_empty() {
+                return self.children.index(i).search(value);
+            }
+        } else if !self.children.is_empty() {
+            return self.children.last().unwrap().search(value);
+        }
+        false
+    }
+
+    // -----------------
+    // | GET FUNCTIONS |
+    // -----------------
+
+    fn get(&self, value: T) -> &Node<T> {
+        todo!()
+    }
+
+    fn get_mut(&mut self, value: T) -> &mut Node<T> {
+        todo!()
     }
 
     // --------------------
