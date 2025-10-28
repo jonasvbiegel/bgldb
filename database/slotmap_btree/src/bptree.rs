@@ -72,7 +72,7 @@ impl Tree {
     // TODO: garbage collect empty children on leaves
     // NOTE: i dont think this actually works, as we constantly look if the child of the current
     // node has children, well maybe we could also just check if the key exists in the children
-    // map? using foo.contains_key(id)
+    // map? using contains_key(id)
 
     fn insert_recursive(&mut self, value: i32, id: Id) -> Result<(), TreeError> {
         if let Some(child) = self.get_child(id, value) {
@@ -125,27 +125,6 @@ impl Tree {
         }
     }
 
-    fn push_key(&mut self, value: i32, id: Id) {
-        self.items[id].keys.push(value);
-    }
-
-    fn insert_key(&mut self, value: i32, id: Id) -> Result<(), TreeError> {
-        if self.items[id].keys.contains(&value) {
-            Err(TreeError::InsertValue(value))
-        } else {
-            match self.items[id].keys.iter().position(|x| *x > value) {
-                Some(idx) => {
-                    self.items[id].keys.insert(idx, value);
-                    Ok(())
-                }
-                None => {
-                    self.items[id].keys.push(value);
-                    Ok(())
-                }
-            }
-        }
-    }
-
     fn split_item(&mut self, id: Id) -> Id {
         let new_id = self.create_item();
 
@@ -193,26 +172,6 @@ impl Tree {
     // | DELETE FUNCTIONS |
     // --------------------
 
-    // let key = match self.items[id]
-    //                     .keys
-    //                     .contains(self.items[split_id].keys.index(0))
-    //                 {
-    //                     false => {
-    //                         if !self.children[split_id].is_empty() {
-    //                             self.items[split_id].keys.remove(0)
-    //                         } else {
-    //                             *self.items[split_id].keys.first().unwrap()
-    //                         }
-    //                     }
-    //                     true => {
-    //                         if !self.children[child.id].is_empty() {
-    //                             self.items[child.id].keys.remove(0)
-    //                         } else {
-    //                             *self.items[child.id].keys.first().unwrap()
-    //                         }
-    //                     }
-    //                 };
-
     pub fn delete(&mut self, value: i32) -> Result<(), TreeError> {
         if let Some(root_id) = self.root {
             self.delete_recursive(root_id, value)?;
@@ -223,42 +182,37 @@ impl Tree {
     }
 
     fn delete_recursive(&mut self, id: Id, value: i32) -> Result<(), TreeError> {
+        self.items[id].keys.retain(|x| *x != value);
+
         if let Some(child) = self.get_child(id, value) {
             // get left and right siblings
-            let siblings: (Option<Id>, Option<Id>) = match child.position {
-                Position::First => (None, Some(*self.children[id].index(child.index + 1))),
-                Position::Last => (Some(*self.children[id].index(child.index - 1)), None),
-                _ => (
-                    Some(*self.children[id].index(child.index - 1)),
-                    Some(*self.children[id].index(child.index + 1)),
-                ),
-            };
 
             if !self.children[child.id].is_empty() {
                 self.delete_recursive(child.id, value)?;
-            }
-            self.items[child.id].keys.retain(|x| *x != value);
-
-            // logic to steal from siblings or merge
-
-            if !self.items[id]
-                .keys
-                .contains(self.items[child.id].keys.first().unwrap())
-            {
-                self.items[id].keys.retain(|x| *x != value);
-                let key: i32 = match self.children[child.id].is_empty() {
-                    true => *self.items[child.id].keys.first().unwrap(),
-                    false => self.items[child.id].keys.remove(0),
-                };
-
-                self.insert_key(key, id)?;
+            } else {
+                self.items[child.id].keys.retain(|x| *x != value);
             }
 
-            self.items[id].keys.retain(|x| *x != value);
-        } else {
-            self.items[id].keys.retain(|x| *x != value);
+            // if keys.len() is 0, steal from sibling
+
+            let siblings = self.get_siblings(id, child);
+
+            // if the sibling we stole from is empty, we merge
+
+            // TODO: logic to steal from siblings or merge
         }
         Ok(())
+    }
+
+    fn get_siblings(&self, id: Id, child: Child) -> (Option<Id>, Option<Id>) {
+        match child.position {
+            Position::First => (None, Some(*self.children[id].index(child.index + 1))),
+            Position::Last => (Some(*self.children[id].index(child.index - 1)), None),
+            _ => (
+                Some(*self.children[id].index(child.index - 1)),
+                Some(*self.children[id].index(child.index + 1)),
+            ),
+        }
     }
 
     fn merge(&mut self, id: Id) -> Id {
@@ -291,6 +245,27 @@ impl Tree {
         }
 
         None
+    }
+
+    fn insert_key(&mut self, value: i32, id: Id) -> Result<(), TreeError> {
+        if self.items[id].keys.contains(&value) {
+            Err(TreeError::InsertValue(value))
+        } else {
+            match self.items[id].keys.iter().position(|x| *x > value) {
+                Some(idx) => {
+                    self.items[id].keys.insert(idx, value);
+                    Ok(())
+                }
+                None => {
+                    self.items[id].keys.push(value);
+                    Ok(())
+                }
+            }
+        }
+    }
+
+    fn push_key(&mut self, value: i32, id: Id) {
+        self.items[id].keys.push(value);
     }
 
     // -------------------

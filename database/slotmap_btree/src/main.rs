@@ -10,6 +10,8 @@ fn main() -> Result<(), TreeError> {
         tree.insert(i)?;
     }
 
+    tree.delete(8)?;
+
     println!("{tree:#?}");
 
     Ok(())
