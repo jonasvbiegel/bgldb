@@ -1,7 +1,4 @@
 = Design
-Er ikke sikker med design
-- Måske opbygningen af structs og modules? Kommer nok til at have et par
-- Ved ikke med patterns, det er ikke fordi der er de store patterns i Rust kontra
-  OOP
-- Der skal måske tages hensyn til designet af træstrukturen der peger på
-  forskellige børn
+- Der bliver brugt et B+ træ
+- Vis filstruktur, altså header, nodestruktur og leafstruktur i pages
+- Rust bliver brugt da det forsøger at løse de memory problemer som C og C++ har

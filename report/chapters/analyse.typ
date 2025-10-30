@@ -187,12 +187,85 @@ Jeg finder information om B+ Tree fra @databaseinternals.
 == Læsning fra disk
 For at læse og skrive data fra og til disken, skal det data først ligge i
 hukommelsen af computeren. Hukommelsen læser disken i én "page" ad gangen,
-hvilket er 4096 bytes på de fleste styresystemer @pagewikipedia . Dette betyder
-at ens kode skal optimeres ved kun at læse de data som der er relevante for den
-operation der bliver kørt mod databasen, én page ad gangen.
+hvilket er 4096 bytes på de fleste styresystemer @pagewikipedia ( *RET TIL
+@databaseinternals* ). Dette betyder at ens kode skal optimeres ved kun at læse
+de data som der er relevante for den operation der bliver kørt mod databasen ind
+i hukommelsen, én page ad gangen.
 
-- Side fra bogen hvor de snakker om pages
-- Hvorfor pages?
+B+ træstrukturen kan gemmes i disken, hvor ordren af træet kan bestemmes af
+størrelsen af en page, hvilket er 4kB. For at gøre dette er det vigtigt at
+forstå bytestrukturen af forskellige heltalsrepræsentationer.
+
+=== Heltal i bytes
+Én byte er opbygget af 8 bits, og derfor vil disse beskrives først.
+
+En bit er det mindste stykke data computerhukommelsen indeholder. Dette er et
+stykke info som kun indeholder en ud af to forskellige stadier, sandt eller
+falsk, beskrevet som 0 eller 1. Dette er træk fra det binære talsystem, som kan
+bruges til at beskrive alle tal. Se @bitstructure for én bitstruktur af et
+heltal.
+
+#let bitstructure = cetz.canvas({
+  // 11100110 is 230 in binary
+  import cetz.draw: *
+  grid((0, 0), (8, 1), name: "grid")
+  content((0.5, 0.5), [1])
+  content((1.5, 0.5), [1])
+  content((2.5, 0.5), [1])
+  content((3.5, 0.5), [0])
+  content((4.5, 0.5), [0])
+  content((5.5, 0.5), [1])
+  content((6.5, 0.5), [1])
+  content((7.5, 0.5), [0])
+})
+
+#figure(
+  rect(bitstructure, inset: 5pt, stroke: none), caption: [Tallet 230 skrevet i det binære talsystem, repræsenteret i 8 bits],
+) <bitstructure>
+
+Det er dog meget ineffektivt konstant at læse og skrive rene bits, da det
+hurtigt bliver store dele data. Derfor bliver de skrevet ind i bytes, som er en
+hexadicimal beskrivelse for 8 bits som nemmere kan læses og rykkes rundt.
+Maksværdien af 8 bits er `11111111`, hvilker også er maksværdien af to
+hexadecimale tal, skrevet som `FF`. Derfor kan en byte beskrives som to
+hexadicamale tal der beskriver 8 bits. Eksemplet i @bitstructure kan skrives som
+E6 i bytes. Disse er også usigneret bytes, hvilket vil sige at de kun er
+positive heltal. Da det kun er 8 bits der beskriver værdien er det af typen `u8`,
+altså et 8 bit heltal.
+
+=== Struktur af en page på disken
+Der blev tidligere nævnt af B+ træet kan gemmes på disken, hvor hver node fylder
+én page. Denne page skal dog holde forskellige informationer, såsom indeks, børn
+et cetera. En mulig måde at holde denne information kan ses på @pagestructure.
+
+#let pagestructure = cetz.canvas(
+  {
+    import cetz.draw: *
+    rect((0, 0), (4, 1), fill: blue, name: "1")
+    rect((4, 0), (12, 1), fill: red, name: "2")
+    rect((12, 0), (16, 1), fill: blue, name: "3")
+    grid((0, 0), (16, 1))
+
+    content(
+      (2, 1.2), [#text(size: 11.5pt, [`child_pointer: u32`])], anchor: "south",
+    )
+    content((8, 1.2), [#text(size: 11.5pt, [`index: u64`])], anchor: "south")
+    content(
+      (14, 1.2), [#text(size: 11.5pt, [`child_pointer: u32`])], anchor: "south",
+    )
+  },
+)
+
+#figure(
+  scale(90%, rect(pagestructure, inset: 0pt, stroke: none)), caption: [En mulig struktur af én page på disken, der viser en node med 2 børn og ét
+    indeks. Pointersne bruger et ikke-signeret 32 bit heltal, mens indekset bruger
+    et ikke-signeret 64 bit heltal.],
+) <pagestructure>
+
+Som vist i @bplustree har et B+ træ flere nøgler og børn. Det kan ses i
+ovenstående figur at strukturen her har ét indeks og to børn. Dette kan så
+skaleres op til flere indeks og børn, og så kan et helt B+ træ gemmes på en
+disk.
 
 == Programmering
 Mange databaser er i dag skrevet i programmeringssprogene C og C++. Disse sprog
