@@ -134,7 +134,13 @@ impl Header {
 #[derive(Debug)]
 // pagetype and data_len are stored in the header, which is the first 3 bytes. after that is the
 // keys and pointers, stored in the order c_1, k_1, c_2, k_2 .. c_n, k_n, c_last
+
+// NOTE: should just have a header i think, then the node handler can handle node types (root,
+// node, leaf)
+//
 pub struct Page {
+    // header: Vec<u8>
+    // content: Vec<u8>
     pagetype: PageType,
     keys_len: u16,
     keys: Vec<u64>,
