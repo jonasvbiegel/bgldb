@@ -1,2 +1,0 @@
-= Konklusion
-Konklusion af rapporten
