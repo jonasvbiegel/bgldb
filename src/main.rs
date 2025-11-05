@@ -2,20 +2,19 @@ use std::fs::{File, OpenOptions};
 use std::io::{Error, Read, Seek, SeekFrom, Write};
 use std::ops::Index;
 
-// BIG ENDIAN BYTES
+// LITTLE ENDIAN BYTES
 
 const PAGESIZE: u64 = 4096;
 type Id = u64;
 
 fn main() -> Result<(), Error> {
-    let mut handler = FileHandler::new("test")?;
+    let mut handler = FileHandler::new_test("test")?;
 
     let page_id = dbg!(handler.new_page()?);
-    // handler.write_to_page(page_id, "GUNGA GAMER".as_bytes())?;
 
-    let read = handler.read_page(page_id);
-
-    println!("{read:?}");
+    // let read = handler.read_page(page_id);
+    //
+    // println!("{read:?}");
 
     let mut header = Header { elements: 909090 };
     handler.write_to_header(&header.serialize())?;
@@ -27,19 +26,19 @@ fn main() -> Result<(), Error> {
     let mut b: Vec<u8> = Vec::new();
     b.push(0x01);
 
-    for x in u16::to_be_bytes(1) {
+    for x in u16::to_le_bytes(1) {
         b.push(x);
     }
 
-    for y in u32::to_be_bytes(123) {
+    for y in u32::to_le_bytes(123) {
         b.push(y);
     }
 
-    for z in u64::to_be_bytes(7123123173) {
+    for z in u64::to_le_bytes(7123123173) {
         b.push(z);
     }
 
-    for æ in u32::to_be_bytes(456) {
+    for æ in u32::to_le_bytes(456) {
         b.push(æ);
     }
 
@@ -59,10 +58,28 @@ impl FileHandler {
         let mut h = Self {
             file: OpenOptions::new()
                 .create(true)
-                .truncate(true)
+                .truncate(false)
                 .write(true)
                 .read(true)
                 .open(format!("./{name}"))
+                .unwrap(),
+        };
+
+        if h.file.metadata()?.len() == 0 {
+            h.write(&[0x00; PAGESIZE as usize])?;
+        }
+
+        Ok(h)
+    }
+
+    fn new_test(name: &str) -> Result<Self, Error> {
+        let mut h = Self {
+            file: OpenOptions::new()
+                .create(true)
+                .truncate(true)
+                .write(true)
+                .read(true)
+                .open(format!("test/{name}"))
                 .unwrap(),
         };
 
@@ -141,7 +158,7 @@ impl Header {
             return None;
         }
 
-        let e = u64::from_be_bytes(bytes[0..8].try_into().unwrap());
+        let e = u64::from_le_bytes(bytes[0..8].try_into().unwrap());
 
         Some(Self { elements: e })
     }
@@ -149,7 +166,7 @@ impl Header {
     fn serialize(&mut self) -> Vec<u8> {
         let mut b: [u8; PAGESIZE as usize] = [0x00; PAGESIZE as usize];
 
-        for (idx, byte) in self.elements.to_be_bytes().iter().enumerate() {
+        for (idx, byte) in self.elements.to_le_bytes().iter().enumerate() {
             b[idx] = *byte;
         }
 
@@ -180,7 +197,7 @@ impl Page {
             _ => return None,
         };
 
-        let keys_len = u16::from_be_bytes(bytes[1..=2].try_into().unwrap());
+        let keys_len = u16::from_le_bytes(bytes[1..=2].try_into().unwrap());
 
         let mut keys = Vec::new();
         let mut pointers = Vec::new();
@@ -190,11 +207,11 @@ impl Page {
             _ => {
                 for (i, b) in bytes[3..].chunks(12).enumerate() {
                     if i >= (keys_len).into() {
-                        pointers.push(u32::from_be_bytes(b[0..=3].try_into().unwrap()));
+                        pointers.push(u32::from_le_bytes(b[0..=3].try_into().unwrap()));
                         break;
                     } else {
-                        pointers.push(u32::from_be_bytes(b[0..=3].try_into().unwrap()));
-                        keys.push(u64::from_be_bytes(b[4..].try_into().unwrap()));
+                        pointers.push(u32::from_le_bytes(b[0..=3].try_into().unwrap()));
+                        keys.push(u64::from_le_bytes(b[4..].try_into().unwrap()));
                     }
                 }
             }
