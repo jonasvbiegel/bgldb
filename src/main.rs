@@ -159,7 +159,7 @@ impl Header {
 
 #[derive(Debug)]
 // pagetype and data_len are stored in the header, which is the first 3 bytes. after that is the
-// keys and children, stored in the order c_1, k_1, c_2, k_2 .. c_n, k_n, c_last
+// keys and pointers, stored in the order c_1, k_1, c_2, k_2 .. c_n, k_n, c_last
 struct Page {
     pagetype: PageType,
     keys_len: u16,
