@@ -1,8 +1,9 @@
 use std::fs::{File, OpenOptions};
 use std::io::{Error, Read, Seek, SeekFrom, Write};
 use std::ops::Index;
+use thiserror::Error;
 
-// LITTLE ENDIAN BYTES
+// NOTE: LITTLE ENDIAN BYTES
 const PAGESIZE: u64 = 4096;
 type Id = u64;
 
@@ -107,24 +108,44 @@ impl FileHandler {
 #[derive(Debug)]
 pub struct Header {
     pub elements: u64,
+    pub keytype: KeyType,
 }
 
 impl Header {
-    pub fn deserialize(bytes: &[u8]) -> Option<Header> {
+    pub fn deserialize(bytes: &[u8]) -> Result<Header, PageError> {
         if bytes.len() != PAGESIZE as usize {
-            return None;
+            return Err(PageError::Pagesize(bytes.len()));
         }
 
-        let e = u64::from_le_bytes(bytes[0..8].try_into().unwrap());
+        let elements = u64::from_le_bytes(bytes[0..8].try_into().unwrap());
 
-        Some(Self { elements: e })
+        let keytype = match bytes.index(8) {
+            0x01 => KeyType::String(*bytes.index(9)),
+            0x02 => KeyType::Usize,
+            _ => return Err(PageError::Keytype(*bytes.index(8))),
+        };
+
+        let _content_start = match keytype {
+            KeyType::String(_) => 10,
+            KeyType::Usize => 9,
+        };
+
+        Ok(Header { elements, keytype })
     }
 
     pub fn serialize(&mut self) -> Vec<u8> {
-        let mut b: [u8; PAGESIZE as usize] = [0x00; PAGESIZE as usize];
+        let mut b = Vec::<u8>::new();
 
         for (idx, byte) in self.elements.to_le_bytes().iter().enumerate() {
-            b[idx] = *byte;
+            b.insert(idx, *byte);
+        }
+
+        match self.keytype {
+            KeyType::String(len) => {
+                b.push(0x01);
+                b.push(len);
+            }
+            KeyType::Usize => b.push(0x02),
         }
 
         b.to_vec()
@@ -132,19 +153,19 @@ impl Header {
 }
 
 #[derive(Debug)]
-// pagetype and data_len are stored in the header, which is the first 3 bytes. after that is the
-// keys and pointers, stored in the order c_1, k_1, c_2, k_2 .. c_n, k_n, c_last
-
-// NOTE: should just have a header i think, then the node handler can handle node types (root,
-// node, leaf)
+// NOTE: can maybe hold more information in the future
+// id      pagetype    keys_len    |   keys(n)      pointers(n + 1)
+// usize   u8          u16         |   Vec<u64>     Vec<u64>
 //
+// n = PAGESIZE - id(16 bytes) - pagetype(1 byte) - keys_len(2 bytes)
+// NOTE: this should also account for String(n) which has a variable amount of bytes it takes
+
 pub struct Page {
-    // header: Vec<u8>
-    // content: Vec<u8>
-    pagetype: PageType,
-    keys_len: u16,
-    keys: Vec<u64>,
-    pointers: Vec<u32>,
+    // id: usize,          // 0..=7
+    pagetype: PageType, // 8
+    keys_len: u16,      // 9..=10
+    keys: Vec<u64>,     // n
+    pointers: Vec<u64>, // n + 1
 }
 
 impl Page {
@@ -160,7 +181,7 @@ impl Page {
             _ => return None,
         };
 
-        let keys_len = u16::from_le_bytes(bytes[1..=2].try_into().unwrap());
+        let keys_len = u16::from_le_bytes(bytes[1..3].try_into().unwrap());
 
         let mut keys = Vec::new();
         let mut pointers = Vec::new();
@@ -168,19 +189,20 @@ impl Page {
         match pagetype {
             PageType::Leaf => todo!(),
             _ => {
-                for (i, b) in bytes[3..].chunks(12).enumerate() {
+                for (i, b) in bytes[3..].chunks(16).enumerate() {
                     if i >= (keys_len).into() {
-                        pointers.push(u32::from_le_bytes(b[0..=3].try_into().unwrap()));
+                        pointers.push(u64::from_le_bytes(b[0..=7].try_into().unwrap()));
                         break;
                     } else {
-                        pointers.push(u32::from_le_bytes(b[0..=3].try_into().unwrap()));
-                        keys.push(u64::from_le_bytes(b[4..].try_into().unwrap()));
+                        pointers.push(u64::from_le_bytes(b[0..=7].try_into().unwrap()));
+                        keys.push(u64::from_le_bytes(b[8..].try_into().unwrap()));
                     }
                 }
             }
         }
 
         Some(Page {
+            // id,
             pagetype,
             keys_len,
             keys,
@@ -194,8 +216,23 @@ impl Page {
 }
 
 #[derive(Debug)]
+pub enum KeyType {
+    String(u8), //0x01
+    Usize,      //0x02
+}
+
+#[derive(Debug)]
 pub enum PageType {
     Root, //0x01
     Node, //0x02
     Leaf, //0x03
+}
+
+#[derive(Error, Debug)]
+pub enum PageError {
+    #[error("page was not 4096 bytes ({0})")]
+    Pagesize(usize),
+
+    #[error("keytype could not be parsed ({0})")]
+    Keytype(u8),
 }

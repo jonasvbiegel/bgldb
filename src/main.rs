@@ -1,35 +1,42 @@
 mod filehandler;
-use filehandler::{FileHandler, Header, Page};
-use std::io::Error;
+use filehandler::{FileHandler, Header, KeyType, Page};
+use std::error::Error;
 
-fn main() -> Result<(), Error> {
+fn main() -> Result<(), Box<dyn Error>> {
     let mut handler = FileHandler::new_test("test")?;
 
     let page_id = dbg!(handler.new_page()?);
 
-    let mut header = Header { elements: 909090 };
+    let mut header = Header {
+        elements: 909090,
+        keytype: KeyType::String(10),
+    };
+
     handler.write_to_header(&header.serialize())?;
 
-    let header_read = Header::deserialize(&handler.read_header().unwrap());
-
-    println!("{header_read:?}");
+    dbg!(Header::deserialize(&handler.read_header()?))?;
 
     let mut b: Vec<u8> = Vec::new();
+    // page type
     b.push(0x01);
 
+    // keys_len
     for x in u16::to_le_bytes(1) {
         b.push(x);
     }
 
-    for y in u32::to_le_bytes(123) {
+    // first pointer
+    for y in u64::to_le_bytes(123) {
         b.push(y);
     }
 
-    for z in u64::to_le_bytes(7123123173) {
+    // keys
+    for z in u64::to_le_bytes(999) {
         b.push(z);
     }
 
-    for æ in u32::to_le_bytes(456) {
+    // last pointer
+    for æ in u64::to_le_bytes(456) {
         b.push(æ);
     }
 
