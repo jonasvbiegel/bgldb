@@ -7,11 +7,11 @@ use thiserror::Error;
 const PAGESIZE: u64 = 4096;
 type Id = u64;
 
-pub struct FileHandler {
+pub struct Database {
     file: File,
 }
 
-impl FileHandler {
+impl Database {
     pub fn new(name: &str) -> Result<Self, Error> {
         let mut h = Self {
             file: OpenOptions::new()
@@ -153,6 +153,7 @@ impl Header {
 }
 
 // NOTE: can maybe hold more information in the future
+//
 // id      pagetype    keys_len    |   keys(n)      pointers(n + 1)
 // usize   u8          u16         |   Vec<u64>     Vec<u64>
 //
@@ -244,6 +245,14 @@ struct Field {
 
 impl Field {
     fn new() -> Field {
+        todo!()
+    }
+
+    fn serialize() -> Vec<u8> {
+        todo!()
+    }
+
+    fn deserialize() -> Field {
         todo!()
     }
 }

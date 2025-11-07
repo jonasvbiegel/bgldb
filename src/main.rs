@@ -1,9 +1,9 @@
-mod filehandler;
-use filehandler::{FileHandler, Header, KeyType, Page};
+mod database;
+use database::{Database, Header, KeyType, Page};
 use std::error::Error;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let mut handler = FileHandler::new_test("test")?;
+    let mut handler = Database::new_test("test")?;
 
     let page_id = dbg!(handler.new_page()?);
 
