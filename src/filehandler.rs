@@ -152,7 +152,6 @@ impl Header {
     }
 }
 
-#[derive(Debug)]
 // NOTE: can maybe hold more information in the future
 // id      pagetype    keys_len    |   keys(n)      pointers(n + 1)
 // usize   u8          u16         |   Vec<u64>     Vec<u64>
@@ -160,8 +159,9 @@ impl Header {
 // n = PAGESIZE - id(16 bytes) - pagetype(1 byte) - keys_len(2 bytes)
 // NOTE: this should also account for String(n) which has a variable amount of bytes it takes
 
+#[derive(Debug)]
 pub struct Page {
-    // id: usize,          // 0..=7
+    id: usize,          // 0..=7
     pagetype: PageType, // 8
     keys_len: u16,      // 9..=10
     keys: Vec<u64>,     // n
@@ -174,14 +174,16 @@ impl Page {
             return None;
         }
 
-        let pagetype = match bytes.index(0) {
+        let id = usize::from_le_bytes(bytes[0..=7].try_into().unwrap());
+
+        let pagetype = match bytes.index(8) {
             0x01 => PageType::Root,
             0x02 => PageType::Node,
             0x03 => PageType::Leaf,
             _ => return None,
         };
 
-        let keys_len = u16::from_le_bytes(bytes[1..3].try_into().unwrap());
+        let keys_len = u16::from_le_bytes(bytes[9..11].try_into().unwrap());
 
         let mut keys = Vec::new();
         let mut pointers = Vec::new();
@@ -189,20 +191,38 @@ impl Page {
         match pagetype {
             PageType::Leaf => todo!(),
             _ => {
-                for (i, b) in bytes[3..].chunks(16).enumerate() {
-                    if i >= (keys_len).into() {
-                        pointers.push(u64::from_le_bytes(b[0..=7].try_into().unwrap()));
+                // for (i, b) in bytes[3..].chunks(16).enumerate() {
+                //     if i >= (keys_len).into() {
+                //         pointers.push(u64::from_le_bytes(b[0..=7].try_into().unwrap()));
+                //         break;
+                //     } else {
+                //         pointers.push(u64::from_le_bytes(b[0..=7].try_into().unwrap()));
+                //         keys.push(u64::from_le_bytes(b[8..].try_into().unwrap()));
+                //     }
+                // }
+
+                for (i, b) in bytes[11..].chunks(size_of::<u64>()).enumerate() {
+                    if i >= keys_len as usize {
                         break;
-                    } else {
-                        pointers.push(u64::from_le_bytes(b[0..=7].try_into().unwrap()));
-                        keys.push(u64::from_le_bytes(b[8..].try_into().unwrap()));
                     }
+                    keys.push(u64::from_le_bytes(b.try_into().unwrap()));
+                }
+
+                for (i, b) in bytes[11 + size_of::<u64>() * keys_len as usize..]
+                    .chunks(size_of::<u64>())
+                    .enumerate()
+                {
+                    if i > keys_len as usize {
+                        break;
+                    }
+
+                    pointers.push(u64::from_le_bytes(b.try_into().unwrap()));
                 }
             }
         }
 
         Some(Page {
-            // id,
+            id,
             pagetype,
             keys_len,
             keys,
@@ -211,6 +231,19 @@ impl Page {
     }
 
     pub fn serialize(&mut self) -> Vec<u8> {
+        todo!()
+    }
+}
+
+struct Field {
+    field: String,
+    primary: bool,
+    keytype: KeyType,
+    data: Vec<u8>,
+}
+
+impl Field {
+    fn new() -> Field {
         todo!()
     }
 }

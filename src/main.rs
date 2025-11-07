@@ -17,6 +17,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     dbg!(Header::deserialize(&handler.read_header()?))?;
 
     let mut b: Vec<u8> = Vec::new();
+    for i in page_id.to_le_bytes() {
+        b.push(i);
+    }
+
     // page type
     b.push(0x01);
 
@@ -25,14 +29,14 @@ fn main() -> Result<(), Box<dyn Error>> {
         b.push(x);
     }
 
-    // first pointer
-    for y in u64::to_le_bytes(123) {
-        b.push(y);
-    }
-
     // keys
     for z in u64::to_le_bytes(999) {
         b.push(z);
+    }
+
+    // first pointer
+    for y in u64::to_le_bytes(123) {
+        b.push(y);
     }
 
     // last pointer
