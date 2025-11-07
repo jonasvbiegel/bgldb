@@ -161,16 +161,16 @@ impl Header {
 // NOTE: this should also account for String(n) which has a variable amount of bytes it takes
 
 #[derive(Debug)]
-pub struct Page {
-    id: usize,          // 0..=7
+pub struct Node {
+    id: Id,             // 0..=7
     pagetype: PageType, // 8
     keys_len: u16,      // 9..=10
     keys: Vec<u64>,     // n
     pointers: Vec<u64>, // n + 1
 }
 
-impl Page {
-    pub fn deserialize(bytes: &[u8]) -> Option<Page> {
+impl Node {
+    pub fn deserialize_node(bytes: &[u8]) -> Option<Node> {
         if bytes.len() != PAGESIZE as usize {
             return None;
         }
@@ -192,16 +192,6 @@ impl Page {
         match pagetype {
             PageType::Leaf => todo!(),
             _ => {
-                // for (i, b) in bytes[3..].chunks(16).enumerate() {
-                //     if i >= (keys_len).into() {
-                //         pointers.push(u64::from_le_bytes(b[0..=7].try_into().unwrap()));
-                //         break;
-                //     } else {
-                //         pointers.push(u64::from_le_bytes(b[0..=7].try_into().unwrap()));
-                //         keys.push(u64::from_le_bytes(b[8..].try_into().unwrap()));
-                //     }
-                // }
-
                 for (i, b) in bytes[11..].chunks(size_of::<u64>()).enumerate() {
                     if i >= keys_len as usize {
                         break;
@@ -222,8 +212,8 @@ impl Page {
             }
         }
 
-        Some(Page {
-            id,
+        Some(Node {
+            id: id.try_into().unwrap(),
             pagetype,
             keys_len,
             keys,
@@ -231,21 +221,36 @@ impl Page {
         })
     }
 
-    pub fn serialize(&mut self) -> Vec<u8> {
+    pub fn serialize_node(&mut self) -> Vec<u8> {
         todo!()
     }
 }
 
+#[derive(Debug)]
+pub struct Data {
+    id: Id,
+    objects: u16,
+    fields: Vec<Field>,
+}
+
+impl Data {}
+
+#[derive(Debug)]
 struct Field {
-    field: String,
+    field: Box<[u8]>,
     primary: bool,
     keytype: KeyType,
     data: Vec<u8>,
 }
 
 impl Field {
-    fn new() -> Field {
-        todo!()
+    fn new(field: &str, primary: bool, keytype: KeyType, data: Vec<u8>) -> Field {
+        Self {
+            field: field.as_bytes().into(),
+            primary,
+            keytype,
+            data,
+        }
     }
 
     fn serialize() -> Vec<u8> {
@@ -254,6 +259,50 @@ impl Field {
 
     fn deserialize() -> Field {
         todo!()
+    }
+}
+
+pub struct DataBuilder {
+    id: Id,
+    fields: Vec<Field>,
+}
+
+impl DataBuilder {
+    pub fn new(id: Id) -> DataBuilder {
+        Self {
+            id,
+            fields: Vec::new(),
+        }
+    }
+
+    pub fn primary(
+        mut self,
+        name: &str,
+        keytype: KeyType,
+        data: Vec<u8>,
+    ) -> Result<DataBuilder, DataBuilderError> {
+        match self.fields.iter().find(|x| x.primary) {
+            Some(f) => Err(DataBuilderError::Fieldname(
+                String::from_utf8(f.field.to_vec()).unwrap(),
+            )),
+            None => {
+                self.fields.push(Field::new(name, true, keytype, data));
+                Ok(self)
+            }
+        }
+    }
+
+    pub fn field(mut self, name: &str, keytype: KeyType, data: Vec<u8>) -> DataBuilder {
+        self.fields.push(Field::new(name, false, keytype, data));
+        self
+    }
+
+    pub fn build(self) -> Data {
+        Data {
+            id: self.id,
+            objects: self.fields.len() as u16,
+            fields: self.fields,
+        }
     }
 }
 
@@ -268,6 +317,7 @@ pub enum PageType {
     Root, //0x01
     Node, //0x02
     Leaf, //0x03
+    Data, //0x04
 }
 
 #[derive(Error, Debug)]
@@ -277,4 +327,10 @@ pub enum PageError {
 
     #[error("keytype could not be parsed ({0})")]
     Keytype(u8),
+}
+
+#[derive(Error, Debug)]
+pub enum DataBuilderError {
+    #[error("data already contains a primary key ({0})")]
+    Fieldname(String),
 }
