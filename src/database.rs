@@ -170,9 +170,9 @@ pub struct Node {
 }
 
 impl Node {
-    pub fn deserialize_node(bytes: &[u8]) -> Option<Node> {
+    pub fn deserialize_node(bytes: &[u8]) -> Result<Node, PageError> {
         if bytes.len() != PAGESIZE as usize {
-            return None;
+            return Err(PageError::Pagesize(bytes.len()));
         }
 
         let id = usize::from_le_bytes(bytes[0..=7].try_into().unwrap());
@@ -181,7 +181,8 @@ impl Node {
             0x01 => PageType::Root,
             0x02 => PageType::Node,
             0x03 => PageType::Leaf,
-            _ => return None,
+            // _ => return None,
+            _ => return Err(PageError::Pagetype(*bytes.index(8))),
         };
 
         let keys_len = u16::from_le_bytes(bytes[9..11].try_into().unwrap());
@@ -212,7 +213,7 @@ impl Node {
             }
         }
 
-        Some(Node {
+        Ok(Node {
             id: id.try_into().unwrap(),
             pagetype,
             keys_len,
@@ -221,19 +222,30 @@ impl Node {
         })
     }
 
-    pub fn serialize_node(&mut self) -> Vec<u8> {
+    pub fn serialize_node(self) -> Vec<u8> {
         todo!()
     }
 }
 
+// id   fields_len | field_n
+// Id   u16          field
+
 #[derive(Debug)]
 pub struct Data {
     id: Id,
-    objects: u16,
+    fields_len: u16,
     fields: Vec<Field>,
 }
 
-impl Data {}
+impl Data {
+    fn serialize(self) -> Vec<u8> {
+        todo!()
+    }
+
+    fn deserialize(bytes: &[u8]) -> Data {
+        todo!()
+    }
+}
 
 #[derive(Debug)]
 struct Field {
@@ -300,7 +312,7 @@ impl DataBuilder {
     pub fn build(self) -> Data {
         Data {
             id: self.id,
-            objects: self.fields.len() as u16,
+            fields_len: self.fields.len() as u16,
             fields: self.fields,
         }
     }
@@ -327,6 +339,9 @@ pub enum PageError {
 
     #[error("keytype could not be parsed ({0})")]
     Keytype(u8),
+
+    #[error("page type was not correct")]
+    Pagetype(u8),
 }
 
 #[derive(Error, Debug)]
