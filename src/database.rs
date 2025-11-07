@@ -121,13 +121,13 @@ impl Header {
 
         let keytype = match bytes.index(8) {
             0x01 => KeyType::String(*bytes.index(9)),
-            0x02 => KeyType::Usize,
+            0x02 => KeyType::Int,
             _ => return Err(PageError::Keytype(*bytes.index(8))),
         };
 
         let _content_start = match keytype {
             KeyType::String(_) => 10,
-            KeyType::Usize => 9,
+            KeyType::Int => 9,
         };
 
         Ok(Header { elements, keytype })
@@ -145,7 +145,7 @@ impl Header {
                 b.push(0x01);
                 b.push(len);
             }
-            KeyType::Usize => b.push(0x02),
+            KeyType::Int => b.push(0x02),
         }
 
         b.to_vec()
@@ -260,7 +260,7 @@ impl Field {
 #[derive(Debug)]
 pub enum KeyType {
     String(u8), //0x01
-    Usize,      //0x02
+    Int,        //0x02
 }
 
 #[derive(Debug)]
