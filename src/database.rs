@@ -1,5 +1,5 @@
 use std::fs::{File, OpenOptions};
-use std::io::{Error, Read, Seek, SeekFrom, Write};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::ops::Index;
 use thiserror::Error;
 
@@ -12,7 +12,7 @@ pub struct Database {
 }
 
 impl Database {
-    pub fn new(name: &str) -> Result<Self, Error> {
+    pub fn new(name: &str) -> Result<Self, DatabaseError> {
         let mut h = Self {
             file: OpenOptions::new()
                 .create(true)
@@ -30,7 +30,7 @@ impl Database {
         Ok(h)
     }
 
-    pub fn new_test(name: &str) -> Result<Self, Error> {
+    pub fn new_test(name: &str) -> Result<Self, DatabaseError> {
         let mut h = Self {
             file: OpenOptions::new()
                 .create(true)
@@ -48,19 +48,19 @@ impl Database {
         Ok(h)
     }
 
-    pub fn new_page(&mut self) -> Result<Id, Error> {
+    pub fn new_page(&mut self) -> Result<Id, DatabaseError> {
         let id = self.file.seek(SeekFrom::End(0))?;
         self.write(&[0x00; PAGESIZE as usize])?;
         Ok((id / PAGESIZE) - 1)
     }
 
-    pub fn write(&mut self, buf: &[u8]) -> Result<(), Error> {
+    pub fn write(&mut self, buf: &[u8]) -> Result<(), DatabaseError> {
         self.file.seek(SeekFrom::End(0))?;
         self.file.write_all(buf)?;
         Ok(())
     }
 
-    pub fn write_to_page(&mut self, id: Id, buf: &[u8]) -> Result<bool, Error> {
+    pub fn write_to_page(&mut self, id: Id, buf: &[u8]) -> Result<bool, DatabaseError> {
         if id <= self.get_max_id()? {
             let pos = PAGESIZE + (PAGESIZE * id);
             self.file.seek(SeekFrom::Start(pos))?;
@@ -70,21 +70,21 @@ impl Database {
         Ok(false)
     }
 
-    pub fn write_to_header(&mut self, buf: &[u8]) -> Result<(), Error> {
+    pub fn write_to_header(&mut self, buf: &[u8]) -> Result<(), DatabaseError> {
         // self.file.seek(SeekFrom::Start(0))?;
         self.file.rewind()?;
         self.file.write_all(buf)?;
         Ok(())
     }
 
-    pub fn read_all(&mut self) -> Result<Vec<u8>, Error> {
+    pub fn read_all(&mut self) -> Result<Vec<u8>, DatabaseError> {
         let mut buf = Vec::new();
         self.file.rewind()?;
         self.file.read_to_end(&mut buf)?;
         Ok(buf)
     }
 
-    pub fn read_page(&mut self, id: Id) -> Result<Vec<u8>, Error> {
+    pub fn read_page(&mut self, id: Id) -> Result<Vec<u8>, DatabaseError> {
         let pos = PAGESIZE + (PAGESIZE * id);
         let mut buf: [u8; PAGESIZE as usize] = [0x00; PAGESIZE as usize];
         self.file.seek(SeekFrom::Start(pos))?;
@@ -92,14 +92,14 @@ impl Database {
         Ok(buf.to_vec())
     }
 
-    pub fn read_header(&mut self) -> Result<Vec<u8>, Error> {
+    pub fn read_header(&mut self) -> Result<Vec<u8>, DatabaseError> {
         let mut buf: [u8; PAGESIZE as usize] = [0x00; PAGESIZE as usize];
         self.file.rewind()?;
         self.file.read_exact(&mut buf)?;
         Ok(buf.to_vec())
     }
 
-    pub fn get_max_id(&mut self) -> Result<u64, Error> {
+    pub fn get_max_id(&mut self) -> Result<u64, DatabaseError> {
         let len = self.file.metadata()?.len();
         Ok((len / PAGESIZE) - 1)
     }
@@ -237,7 +237,9 @@ pub struct Data {
 }
 
 impl Data {
-    fn serialize(self) -> Vec<u8> {}
+    fn serialize(self) -> Vec<u8> {
+        todo!()
+    }
 
     fn deserialize(bytes: &[u8]) -> Data {
         todo!()
@@ -380,4 +382,7 @@ pub enum DatabaseError {
 
     #[error("field was too big ({0})")]
     Fieldsize(usize),
+
+    #[error("failed to read or write from file")]
+    Io(#[from] std::io::Error),
 }
