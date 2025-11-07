@@ -112,22 +112,22 @@ pub struct Header {
 }
 
 impl Header {
-    pub fn deserialize(bytes: &[u8]) -> Result<Header, PageError> {
+    pub fn deserialize(bytes: &[u8]) -> Result<Header, DatabaseError> {
         if bytes.len() != PAGESIZE as usize {
-            return Err(PageError::Pagesize(bytes.len()));
+            return Err(DatabaseError::Pagesize(bytes.len()));
         }
 
         let elements = u64::from_le_bytes(bytes[0..8].try_into().unwrap());
 
         let keytype = match bytes.index(8) {
             0x01 => KeyType::String(*bytes.index(9)),
-            0x02 => KeyType::Int,
-            _ => return Err(PageError::Keytype(*bytes.index(8))),
+            0x02 => KeyType::UInt64,
+            _ => return Err(DatabaseError::Keytype(*bytes.index(8))),
         };
 
         let _content_start = match keytype {
             KeyType::String(_) => 10,
-            KeyType::Int => 9,
+            KeyType::UInt64 => 9,
         };
 
         Ok(Header { elements, keytype })
@@ -145,7 +145,7 @@ impl Header {
                 b.push(0x01);
                 b.push(len);
             }
-            KeyType::Int => b.push(0x02),
+            KeyType::UInt64 => b.push(0x02),
         }
 
         b.to_vec()
@@ -170,9 +170,9 @@ pub struct Node {
 }
 
 impl Node {
-    pub fn deserialize_node(bytes: &[u8]) -> Result<Node, PageError> {
+    pub fn deserialize(bytes: &[u8]) -> Result<Node, DatabaseError> {
         if bytes.len() != PAGESIZE as usize {
-            return Err(PageError::Pagesize(bytes.len()));
+            return Err(DatabaseError::Pagesize(bytes.len()));
         }
 
         let id = usize::from_le_bytes(bytes[0..=7].try_into().unwrap());
@@ -182,7 +182,7 @@ impl Node {
             0x02 => PageType::Node,
             0x03 => PageType::Leaf,
             // _ => return None,
-            _ => return Err(PageError::Pagetype(*bytes.index(8))),
+            _ => return Err(DatabaseError::Pagetype(*bytes.index(8))),
         };
 
         let keys_len = u16::from_le_bytes(bytes[9..11].try_into().unwrap());
@@ -222,30 +222,30 @@ impl Node {
         })
     }
 
-    pub fn serialize_node(self) -> Vec<u8> {
+    pub fn serialize(self) -> Vec<u8> {
         todo!()
     }
 }
 
-// id   fields_len | field_n
-// Id   u16          field
+// id   fields_len | field_n_len field_n
+// Id   u16          u16         field
 
 #[derive(Debug)]
 pub struct Data {
     id: Id,
-    fields_len: u16,
     fields: Vec<Field>,
 }
 
 impl Data {
-    fn serialize(self) -> Vec<u8> {
-        todo!()
-    }
+    fn serialize(self) -> Vec<u8> {}
 
     fn deserialize(bytes: &[u8]) -> Data {
         todo!()
     }
 }
+
+// keytype      field_len   field       primary     data_len    data
+// keytype      u8         string       bool        u32         [u8]
 
 #[derive(Debug)]
 struct Field {
@@ -265,8 +265,41 @@ impl Field {
         }
     }
 
-    fn serialize() -> Vec<u8> {
-        todo!()
+    fn serialize(self) -> Result<Vec<u8>, DatabaseError> {
+        let mut vec: Vec<u8> = Vec::new();
+
+        let len = match self.keytype {
+            KeyType::String(n) => {
+                vec.push(0x01);
+                if n as usize > size_of::<u8>() {
+                    return Err(DatabaseError::Fieldsize(n as usize));
+                }
+                n
+            }
+            KeyType::UInt64 => {
+                vec.push(0x02);
+                size_of::<u64>().try_into().unwrap()
+            }
+        };
+
+        vec.push(len);
+
+        for b in self.field {
+            vec.push(b);
+        }
+
+        match self.primary {
+            true => vec.push(0x02),
+            false => vec.push(0x01),
+        }
+
+        u32::to_le_bytes(self.data.len() as u32)
+            .iter()
+            .for_each(|b| vec.push(*b));
+
+        self.data.iter().for_each(|b| vec.push(*b));
+
+        Ok(vec)
     }
 
     fn deserialize() -> Field {
@@ -292,9 +325,9 @@ impl DataBuilder {
         name: &str,
         keytype: KeyType,
         data: Vec<u8>,
-    ) -> Result<DataBuilder, DataBuilderError> {
+    ) -> Result<DataBuilder, DatabaseError> {
         match self.fields.iter().find(|x| x.primary) {
-            Some(f) => Err(DataBuilderError::Fieldname(
+            Some(f) => Err(DatabaseError::Fieldname(
                 String::from_utf8(f.field.to_vec()).unwrap(),
             )),
             None => {
@@ -312,7 +345,6 @@ impl DataBuilder {
     pub fn build(self) -> Data {
         Data {
             id: self.id,
-            fields_len: self.fields.len() as u16,
             fields: self.fields,
         }
     }
@@ -321,7 +353,7 @@ impl DataBuilder {
 #[derive(Debug)]
 pub enum KeyType {
     String(u8), //0x01
-    Int,        //0x02
+    UInt64,     //0x02
 }
 
 #[derive(Debug)]
@@ -333,7 +365,7 @@ pub enum PageType {
 }
 
 #[derive(Error, Debug)]
-pub enum PageError {
+pub enum DatabaseError {
     #[error("page was not 4096 bytes ({0})")]
     Pagesize(usize),
 
@@ -342,10 +374,10 @@ pub enum PageError {
 
     #[error("page type was not correct")]
     Pagetype(u8),
-}
 
-#[derive(Error, Debug)]
-pub enum DataBuilderError {
     #[error("data already contains a primary key ({0})")]
     Fieldname(String),
+
+    #[error("field was too big ({0})")]
+    Fieldsize(usize),
 }
