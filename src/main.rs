@@ -10,6 +10,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut header = Header {
         elements: 909090,
         keytype: KeyType::String(10),
+        keytype_size: 10,
     };
 
     handler.write_to_header(&header.serialize())?;
@@ -48,14 +49,14 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     dbg!(Node::deserialize(&handler.read_page(page_id)?)?);
 
-    dbg!(
-        DataBuilder::new(0)
-            .primary("id", KeyType::UInt64, u64::to_le_bytes(1234).to_vec())
-            .unwrap()
-            .field("name", KeyType::String(10), str::as_bytes("jonas").to_vec())
-            .field("age", KeyType::UInt64, usize::to_le_bytes(1000).to_vec())
-            .build()
-    );
+    // dbg!(
+    //     DataBuilder::new(0)
+    //         .primary("id", KeyType::UInt64, u64::to_le_bytes(1234).to_vec())
+    //         .unwrap()
+    //         .field("name", KeyType::String(10), str::as_bytes("jonas").to_vec())
+    //         .field("age", KeyType::UInt64, usize::to_le_bytes(1000).to_vec())
+    //         .build()
+    // );
 
     Ok(())
 }

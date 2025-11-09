@@ -109,6 +109,7 @@ impl Database {
 pub struct Header {
     pub elements: u64,
     pub keytype: KeyType,
+    pub keytype_size: u8,
 }
 
 impl Header {
@@ -119,18 +120,17 @@ impl Header {
 
         let elements = u64::from_le_bytes(bytes[0..8].try_into().unwrap());
 
-        let keytype = match bytes.index(8) {
-            0x01 => KeyType::String(*bytes.index(9)),
-            0x02 => KeyType::UInt64,
+        let (keytype, len) = match bytes.index(8) {
+            0x01 => (KeyType::String(*bytes.index(9)), *bytes.index(9)),
+            0x02 => (KeyType::UInt64, 0x08),
             _ => return Err(DatabaseError::Keytype(*bytes.index(8))),
         };
 
-        let _content_start = match keytype {
-            KeyType::String(_) => 10,
-            KeyType::UInt64 => 9,
-        };
-
-        Ok(Header { elements, keytype })
+        Ok(Header {
+            elements,
+            keytype,
+            keytype_size: len,
+        })
     }
 
     pub fn serialize(&mut self) -> Vec<u8> {
@@ -141,11 +141,14 @@ impl Header {
         }
 
         match self.keytype {
-            KeyType::String(len) => {
+            KeyType::String(_) => {
                 b.push(0x01);
-                b.push(len);
+                b.push(self.keytype_size);
             }
-            KeyType::UInt64 => b.push(0x02),
+            KeyType::UInt64 => {
+                b.push(0x02);
+                b.push(self.keytype_size);
+            }
         }
 
         b.to_vec()
@@ -154,23 +157,22 @@ impl Header {
 
 // NOTE: can maybe hold more information in the future
 //
-// id      pagetype    keys_len    |   keys(n)      pointers(n + 1)
-// usize   u8          u16         |   Vec<u64>     Vec<u64>
+// id    | pagetype | keys_len | keys(n)  | pointers(n + 1)
+// usize | u8       | u16      | Vec<KeyType> | Vec<u64>
 //
-// n = PAGESIZE - id(16 bytes) - pagetype(1 byte) - keys_len(2 bytes)
-// NOTE: this should also account for String(n) which has a variable amount of bytes it takes
+// n = ( PAGESIZE - id(16 bytes) - pagetype(1 byte) - keys_len(2 bytes) ) / sizeof(type)
 
 #[derive(Debug)]
 pub struct Node {
     id: Id,             // 0..=7
     pagetype: PageType, // 8
     keys_len: u16,      // 9..=10
-    keys: Vec<u64>,     // n
+    keys: Vec<Vec<u8>>, // n
     pointers: Vec<u64>, // n + 1
 }
 
 impl Node {
-    pub fn deserialize(bytes: &[u8]) -> Result<Node, DatabaseError> {
+    pub fn deserialize(bytes: &[u8], keytype: KeyType) -> Result<Node, DatabaseError> {
         if bytes.len() != PAGESIZE as usize {
             return Err(DatabaseError::Pagesize(bytes.len()));
         }
@@ -181,7 +183,6 @@ impl Node {
             0x01 => PageType::Root,
             0x02 => PageType::Node,
             0x03 => PageType::Leaf,
-            // _ => return None,
             _ => return Err(DatabaseError::Pagetype(*bytes.index(8))),
         };
 
@@ -193,11 +194,24 @@ impl Node {
         match pagetype {
             PageType::Leaf => todo!(),
             _ => {
-                for (i, b) in bytes[11..].chunks(size_of::<u64>()).enumerate() {
-                    if i >= keys_len as usize {
-                        break;
+                match keytype {
+                    KeyType::UInt64 => {
+                        for (i, b) in bytes[11..].chunks(size_of::<u64>()).enumerate() {
+                            if i >= keys_len as usize {
+                                break;
+                            }
+
+                            keys.push(b.try_into().expect("couldnt parse bytes from u64"));
+                        }
                     }
-                    keys.push(u64::from_le_bytes(b.try_into().unwrap()));
+                    KeyType::String(len) => {
+                        for (i, b) in bytes[11..].chunks(len.into()).enumerate() {
+                            if i >= keys_len as usize {
+                                break;
+                            }
+                            keys.push(b.try_into().expect("couldnt parse bytes from string"));
+                        }
+                    }
                 }
 
                 for (i, b) in bytes[11 + size_of::<u64>() * keys_len as usize..]
@@ -247,21 +261,19 @@ impl Data {
 }
 
 // keytype      field_len   field       primary     data_len    data
-// keytype      u8         string       bool        u32         [u8]
+// keytype      u8         string       bool        u16         [u8]
 
 #[derive(Debug)]
 struct Field {
-    field: Box<[u8]>,
-    primary: bool,
+    field: Vec<u8>,
     keytype: KeyType,
     data: Vec<u8>,
 }
 
 impl Field {
-    fn new(field: &str, primary: bool, keytype: KeyType, data: Vec<u8>) -> Field {
+    fn new(field: &str, keytype: KeyType, data: Vec<u8>) -> Field {
         Self {
             field: field.as_bytes().into(),
-            primary,
             keytype,
             data,
         }
@@ -290,12 +302,7 @@ impl Field {
             vec.push(b);
         }
 
-        match self.primary {
-            true => vec.push(0x02),
-            false => vec.push(0x01),
-        }
-
-        u32::to_le_bytes(self.data.len() as u32)
+        u16::to_le_bytes(self.data.len() as u16)
             .iter()
             .for_each(|b| vec.push(*b));
 
@@ -304,8 +311,30 @@ impl Field {
         Ok(vec)
     }
 
-    fn deserialize() -> Field {
-        todo!()
+    // keytype      field_len   field       data_len    data
+    // keytype      u8         string       u32         [u8]
+
+    // this should just use nom, because this is getting stupid at this point
+    fn deserialize(bytes: &[u8]) -> Result<Field, DatabaseError> {
+        let (keytype, keytype_len) = match bytes.index(0) {
+            0x01 => (KeyType::String(*bytes.index(1)), *bytes.index(1)),
+            0x02 => (KeyType::UInt64, *bytes.index(1)),
+            _ => return Err(DatabaseError::Keytype(*bytes.index(0))),
+        };
+
+        let field_len = bytes.index(2);
+        let field = &bytes[3..(*field_len + 3)
+            .try_into()
+            .expect("couldnt parse field_len")];
+        let data_len = bytes.index(*field_len as usize + 4);
+        let data = &bytes[*field_len as usize + 5..*data_len as usize + *field_len as usize + 5]; // what
+        // is this?
+
+        Ok(Self {
+            field: field.to_vec(),
+            keytype,
+            data: data.to_vec(),
+        })
     }
 }
 
@@ -322,26 +351,14 @@ impl DataBuilder {
         }
     }
 
-    pub fn primary(
+    pub fn field(
         mut self,
         name: &str,
         keytype: KeyType,
         data: Vec<u8>,
     ) -> Result<DataBuilder, DatabaseError> {
-        match self.fields.iter().find(|x| x.primary) {
-            Some(f) => Err(DatabaseError::Fieldname(
-                String::from_utf8(f.field.to_vec()).unwrap(),
-            )),
-            None => {
-                self.fields.push(Field::new(name, true, keytype, data));
-                Ok(self)
-            }
-        }
-    }
-
-    pub fn field(mut self, name: &str, keytype: KeyType, data: Vec<u8>) -> DataBuilder {
-        self.fields.push(Field::new(name, false, keytype, data));
-        self
+        self.fields.push(Field::new(name, keytype, data));
+        Ok(self)
     }
 
     pub fn build(self) -> Data {
