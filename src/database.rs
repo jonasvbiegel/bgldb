@@ -3,6 +3,10 @@ use std::io::{Read, Seek, SeekFrom, Write};
 use std::ops::Index;
 use thiserror::Error;
 
+use nom::multi::{count, length_count};
+use nom::number::{Endianness, u8, u64};
+use nom::{IResult, Parser};
+
 // NOTE: LITTLE ENDIAN BYTES
 const PAGESIZE: u64 = 4096;
 type Id = u64;
@@ -121,7 +125,7 @@ impl Header {
         let elements = u64::from_le_bytes(bytes[0..8].try_into().unwrap());
 
         let (keytype, len) = match bytes.index(8) {
-            0x01 => (KeyType::String(*bytes.index(9)), *bytes.index(9)),
+            0x01 => (KeyType::String, *bytes.index(9)),
             0x02 => (KeyType::UInt64, 0x08),
             _ => return Err(DatabaseError::Keytype(*bytes.index(8))),
         };
@@ -141,7 +145,7 @@ impl Header {
         }
 
         match self.keytype {
-            KeyType::String(_) => {
+            KeyType::String => {
                 b.push(0x01);
                 b.push(self.keytype_size);
             }
@@ -157,8 +161,8 @@ impl Header {
 
 // NOTE: can maybe hold more information in the future
 //
-// id    | pagetype | keys_len | keys(n)  | pointers(n + 1)
-// usize | u8       | u16      | Vec<KeyType> | Vec<u64>
+// id    | pagetype | keys_len | keys(n)      | pointers(n + 1)
+// usize | u8       | u16      | Vec<Vec<u8>> | Vec<u64>
 //
 // n = ( PAGESIZE - id(16 bytes) - pagetype(1 byte) - keys_len(2 bytes) ) / sizeof(type)
 
@@ -166,70 +170,42 @@ impl Header {
 pub struct Node {
     id: Id,             // 0..=7
     pagetype: PageType, // 8
-    keys_len: u16,      // 9..=10
+    keytype: KeyType,
+    keys_len: u8,
     keys: Vec<Vec<u8>>, // n
     pointers: Vec<u64>, // n + 1
 }
 
 impl Node {
-    pub fn deserialize(bytes: &[u8], keytype: KeyType) -> Result<Node, DatabaseError> {
-        if bytes.len() != PAGESIZE as usize {
-            return Err(DatabaseError::Pagesize(bytes.len()));
-        }
+    pub fn deserialize(i: &'static [u8]) -> Result<Node, DatabaseError> {
+        let (input, (id, pagetype_input, keytype_input, keys_len)) =
+            (u64(Endianness::Little), u8(), u8(), u8()).parse(i)?;
 
-        let id = usize::from_le_bytes(bytes[0..=7].try_into().unwrap());
-
-        let pagetype = match bytes.index(8) {
+        let pagetype = match pagetype_input {
             0x01 => PageType::Root,
             0x02 => PageType::Node,
             0x03 => PageType::Leaf,
-            _ => return Err(DatabaseError::Pagetype(*bytes.index(8))),
+            _ => return Err(DatabaseError::Pagetype(pagetype_input)),
         };
 
-        let keys_len = u16::from_le_bytes(bytes[9..11].try_into().unwrap());
+        let keytype = match keytype_input {
+            0x01 => KeyType::String,
+            0x02 => KeyType::UInt64,
+            _ => return Err(DatabaseError::Keytype(keytype_input)),
+        };
 
-        let mut keys = Vec::new();
-        let mut pointers = Vec::new();
+        let (input, keys) = match keytype {
+            KeyType::String => count(length_count(u8(), u8()), keys_len as usize).parse(input)?,
+            KeyType::UInt64 => count(count(u8(), 8), keys_len as usize).parse(input)?,
+        };
 
-        match pagetype {
-            PageType::Leaf => todo!(),
-            _ => {
-                match keytype {
-                    KeyType::UInt64 => {
-                        for (i, b) in bytes[11..].chunks(size_of::<u64>()).enumerate() {
-                            if i >= keys_len as usize {
-                                break;
-                            }
-
-                            keys.push(b.try_into().expect("couldnt parse bytes from u64"));
-                        }
-                    }
-                    KeyType::String(len) => {
-                        for (i, b) in bytes[11..].chunks(len.into()).enumerate() {
-                            if i >= keys_len as usize {
-                                break;
-                            }
-                            keys.push(b.try_into().expect("couldnt parse bytes from string"));
-                        }
-                    }
-                }
-
-                for (i, b) in bytes[11 + size_of::<u64>() * keys_len as usize..]
-                    .chunks(size_of::<u64>())
-                    .enumerate()
-                {
-                    if i > keys_len as usize {
-                        break;
-                    }
-
-                    pointers.push(u64::from_le_bytes(b.try_into().unwrap()));
-                }
-            }
-        }
+        let (_input, pointers) =
+            count(u64(Endianness::Little), keys_len as usize + 1).parse(input)?;
 
         Ok(Node {
-            id: id.try_into().unwrap(),
+            id,
             pagetype,
+            keytype,
             keys_len,
             keys,
             pointers,
@@ -315,27 +291,27 @@ impl Field {
     // keytype      u8         string       u32         [u8]
 
     // this should just use nom, because this is getting stupid at this point
-    fn deserialize(bytes: &[u8]) -> Result<Field, DatabaseError> {
-        let (keytype, keytype_len) = match bytes.index(0) {
-            0x01 => (KeyType::String(*bytes.index(1)), *bytes.index(1)),
-            0x02 => (KeyType::UInt64, *bytes.index(1)),
-            _ => return Err(DatabaseError::Keytype(*bytes.index(0))),
-        };
-
-        let field_len = bytes.index(2);
-        let field = &bytes[3..(*field_len + 3)
-            .try_into()
-            .expect("couldnt parse field_len")];
-        let data_len = bytes.index(*field_len as usize + 4);
-        let data = &bytes[*field_len as usize + 5..*data_len as usize + *field_len as usize + 5]; // what
-        // is this?
-
-        Ok(Self {
-            field: field.to_vec(),
-            keytype,
-            data: data.to_vec(),
-        })
-    }
+    // fn deserialize(bytes: &[u8]) -> Result<Field, DatabaseError> {
+    //     let keytype = match bytes.index(0) {
+    //         0x01 => (KeyType::String, *bytes.index(1)),
+    //         0x02 => (KeyType::UInt64, *bytes.index(1)),
+    //         _ => return Err(DatabaseError::Keytype(*bytes.index(0))),
+    //     };
+    //
+    //     let field_len = bytes.index(2);
+    //     let field = &bytes[3..(*field_len + 3)
+    //         .try_into()
+    //         .expect("couldnt parse field_len")];
+    //     let data_len = bytes.index(*field_len as usize + 4);
+    //     let data = &bytes[*field_len as usize + 5..*data_len as usize + *field_len as usize + 5]; // what
+    //     // is this?
+    //
+    //     Ok(Self {
+    //         field: field.to_vec(),
+    //         keytype,
+    //         data: data.to_vec(),
+    //     })
+    // }
 }
 
 pub struct DataBuilder {
@@ -371,8 +347,8 @@ impl DataBuilder {
 
 #[derive(Debug)]
 pub enum KeyType {
-    String(u8), //0x01
-    UInt64,     //0x02
+    String, //0x01
+    UInt64, //0x02
 }
 
 #[derive(Debug)]
@@ -400,6 +376,73 @@ pub enum DatabaseError {
     #[error("field was too big ({0})")]
     Fieldsize(usize),
 
-    #[error("failed to read or write from file")]
+    #[error("failed to read or write from file: ({0})")]
     Io(#[from] std::io::Error),
+
+    #[error("failed to parse: ({0})")]
+    ParseError(#[from] nom::Err<nom::error::Error<&'static [u8]>>),
 }
+
+// pub fn deserialize(bytes: &[u8], keytype: KeyType) -> Result<Node, DatabaseError> {
+//     if bytes.len() != PAGESIZE as usize {
+//         return Err(DatabaseError::Pagesize(bytes.len()));
+//     }
+//
+//     let id = usize::from_le_bytes(bytes[0..=7].try_into().unwrap());
+//
+//     let pagetype = match bytes.index(8) {
+//         0x01 => PageType::Root,
+//         0x02 => PageType::Node,
+//         0x03 => PageType::Leaf,
+//         _ => return Err(DatabaseError::Pagetype(*bytes.index(8))),
+//     };
+//
+//     let keys_len = u16::from_le_bytes(bytes[9..11].try_into().unwrap());
+//
+//     let mut keys = Vec::new();
+//     let mut pointers = Vec::new();
+//
+//     match pagetype {
+//         PageType::Leaf => todo!(),
+//         _ => {
+//             match keytype {
+//                 KeyType::UInt64 => {
+//                     for (i, b) in bytes[11..].chunks(size_of::<u64>()).enumerate() {
+//                         if i >= keys_len as usize {
+//                             break;
+//                         }
+//
+//                         keys.push(b.try_into().expect("couldnt parse bytes from u64"));
+//                     }
+//                 }
+//                 KeyType::String(len) => {
+//                     for (i, b) in bytes[11..].chunks(len.into()).enumerate() {
+//                         if i >= keys_len as usize {
+//                             break;
+//                         }
+//                         keys.push(b.try_into().expect("couldnt parse bytes from string"));
+//                     }
+//                 }
+//             }
+//
+//             for (i, b) in bytes[11 + size_of::<u64>() * keys_len as usize..]
+//                 .chunks(size_of::<u64>())
+//                 .enumerate()
+//             {
+//                 if i > keys_len as usize {
+//                     break;
+//                 }
+//
+//                 pointers.push(u64::from_le_bytes(b.try_into().unwrap()));
+//             }
+//         }
+//     }
+//
+//     Ok(Node {
+//         id: id.try_into().unwrap(),
+//         pagetype,
+//         keys_len,
+//         keys,
+//         pointers,
+//     })
+// }
