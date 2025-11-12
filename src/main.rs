@@ -1,5 +1,5 @@
-mod fileutil;
-use fileutil::{DatabaseError, Header, KeyType, Node, PageHandler, Pageable};
+mod page;
+use page::{DatabaseError, Header, KeyType, Node, PageHandler, Pageable};
 use std::{
     fs::OpenOptions,
     io::{Cursor, Read, Seek, Write},
