@@ -1,15 +1,15 @@
 mod database;
-use database::{Data, DataBuilder, Database, Header, KeyType, Node};
+use database::{Data, DataBuilder, Database, DatabaseError, Header, KeyType, Node};
 use std::error::Error;
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<(), DatabaseError> {
     let mut handler = Database::new_test("test")?;
 
     let page_id = dbg!(handler.new_page()?);
 
     let mut header = Header {
         elements: 909090,
-        keytype: KeyType::String(10),
+        keytype: KeyType::String,
         keytype_size: 10,
     };
 
@@ -22,17 +22,18 @@ fn main() -> Result<(), Box<dyn Error>> {
         b.push(i);
     }
 
-    // page type
+    // nodetype
     b.push(0x01);
 
-    // keys_len
-    for x in u16::to_le_bytes(1) {
-        b.push(x);
-    }
+    //keytype
+    b.push(0x01);
 
-    // keys
-    for z in u64::to_le_bytes(999) {
-        b.push(z);
+    //keys_len
+    b.push(0x01);
+
+    b.push(0x09);
+    for m in "missemand".bytes() {
+        b.push(m)
     }
 
     // first pointer
@@ -48,15 +49,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     handler.write_to_page(page_id, &b)?;
 
     dbg!(Node::deserialize(&handler.read_page(page_id)?)?);
-
-    // dbg!(
-    //     DataBuilder::new(0)
-    //         .primary("id", KeyType::UInt64, u64::to_le_bytes(1234).to_vec())
-    //         .unwrap()
-    //         .field("name", KeyType::String(10), str::as_bytes("jonas").to_vec())
-    //         .field("age", KeyType::UInt64, usize::to_le_bytes(1000).to_vec())
-    //         .build()
-    // );
 
     Ok(())
 }
