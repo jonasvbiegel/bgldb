@@ -1,13 +1,8 @@
 mod page;
-use page::{DatabaseError, Header, KeyType, Node, PageHandler, Pageable};
-use std::{
-    fs::OpenOptions,
-    io::{Cursor, Read, Seek, Write},
-};
+use page::{Header, KeyType, Node, PageError, PageHandler, Pageable};
+use std::io::{Cursor, Write};
 
-impl<T: Write + Read + Seek> Pageable<T> for Vec<u8> {}
-
-fn main() -> Result<(), DatabaseError> {
+fn main() -> Result<(), PageError> {
     // let mut file = OpenOptions::new()
     //     .create(true)
     //     .truncate(true)
@@ -26,6 +21,8 @@ fn main() -> Result<(), DatabaseError> {
         elements: 909090,
         keytype: KeyType::String,
         keytype_size: 10,
+        order: 10,
+        root: 0,
     };
 
     PageHandler::write_to_header(&mut lol, &header.serialize())?;

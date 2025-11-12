@@ -8,22 +8,29 @@ use thiserror::Error;
 const PAGESIZE: u64 = 4096;
 type Id = u64;
 
-pub struct PageHandler;
-impl<T: Write + Read + Seek> Pageable<T> for PageHandler {}
-
 pub trait Pageable<T: Write + Read + Seek> {
-    fn new_page(source: &mut T) -> Result<Id, DatabaseError> {
+    fn new_page(source: &mut T) -> Result<Id, PageError>;
+    fn write_to_page(source: &mut T, id: Id, buf: &[u8]) -> Result<(), PageError>;
+    fn write_to_header(source: &mut T, buf: &[u8]) -> Result<(), PageError>;
+    fn read_page(source: &mut T, id: Id) -> Result<Vec<u8>, PageError>;
+    fn read_header(source: &mut T) -> Result<Vec<u8>, PageError>;
+}
+
+pub struct PageHandler;
+
+impl<T: Write + Read + Seek> Pageable<T> for PageHandler {
+    fn new_page(source: &mut T) -> Result<Id, PageError> {
         let id = source.seek(SeekFrom::End(0))?;
         let w = source.write(&[0x00; PAGESIZE as usize])?;
         if w != PAGESIZE as usize {
-            return Err(DatabaseError::WriteBytesExact(w));
+            return Err(PageError::WriteBytesExact(w));
         }
         Ok((id / PAGESIZE) - 1)
     }
 
-    fn write_to_page(source: &mut T, id: Id, buf: &[u8]) -> Result<(), DatabaseError> {
+    fn write_to_page(source: &mut T, id: Id, buf: &[u8]) -> Result<(), PageError> {
         if buf.len() > PAGESIZE as usize {
-            return Err(DatabaseError::BiggerBuffer(buf.len()));
+            return Err(PageError::BiggerBuffer(buf.len()));
         }
 
         let pos = PAGESIZE + (PAGESIZE * id);
@@ -32,13 +39,13 @@ pub trait Pageable<T: Write + Read + Seek> {
         Ok(())
     }
 
-    fn write_to_header(source: &mut T, buf: &[u8]) -> Result<(), DatabaseError> {
+    fn write_to_header(source: &mut T, buf: &[u8]) -> Result<(), PageError> {
         source.rewind()?;
         source.write_all(buf)?;
         Ok(())
     }
 
-    fn read_page(source: &mut T, id: Id) -> Result<Vec<u8>, DatabaseError> {
+    fn read_page(source: &mut T, id: Id) -> Result<Vec<u8>, PageError> {
         let pos = PAGESIZE + (PAGESIZE * id);
         let mut buf: [u8; PAGESIZE as usize] = [0x00; PAGESIZE as usize];
         source.seek(SeekFrom::Start(pos))?;
@@ -46,7 +53,7 @@ pub trait Pageable<T: Write + Read + Seek> {
         Ok(buf.to_vec())
     }
 
-    fn read_header(source: &mut T) -> Result<Vec<u8>, DatabaseError> {
+    fn read_header(source: &mut T) -> Result<Vec<u8>, PageError> {
         let mut buf: [u8; PAGESIZE as usize] = [0x00; PAGESIZE as usize];
         source.rewind()?;
         source.read_exact(&mut buf)?;
@@ -59,27 +66,37 @@ pub struct Header {
     pub elements: u64,
     pub keytype: KeyType,
     pub keytype_size: u8,
+    pub root: Id,
+    pub order: u8,
 }
 
 impl Header {
-    pub fn deserialize(bytes: &[u8]) -> Result<Header, DatabaseError> {
+    pub fn deserialize(bytes: &[u8]) -> Result<Header, PageError> {
         if bytes.len() != PAGESIZE as usize {
-            return Err(DatabaseError::Pagesize(bytes.len()));
+            return Err(PageError::Pagesize(bytes.len()));
         }
 
-        let (_, (elements, keytype, keytype_size)) =
-            (u64(Endianness::Little), u8(), u8()).parse(bytes)?;
+        let (_, (elements, keytype, keytype_size, root, order)) = (
+            u64(Endianness::Little),
+            u8(),
+            u8(),
+            u64(Endianness::Little),
+            u8(),
+        )
+            .parse(bytes)?;
 
         let keytype = match keytype {
             0x01 => KeyType::String,
             0x02 => KeyType::UInt64,
-            _ => return Err(DatabaseError::Keytype(keytype)),
+            _ => return Err(PageError::Keytype(keytype)),
         };
 
         Ok(Header {
             elements,
             keytype,
             keytype_size,
+            root,
+            order,
         })
     }
 
@@ -99,64 +116,89 @@ impl Header {
                 b.push(0x02);
                 b.push(self.keytype_size);
             }
-            _ => {}
         }
 
-        b.to_vec()
+        for byte in self.root.to_le_bytes() {
+            b.push(byte);
+        }
+
+        b.push(self.order);
+
+        b
     }
 }
 
-// NOTE: can maybe hold more information in the future
-//
-// id    | pagetype | keys_len | keys(n)      | pointers(n + 1)
-// usize | u8       | u16      | Vec<Vec<u8>> | Vec<u64>
-//
-// n = ( PAGESIZE - id(16 bytes) - pagetype(1 byte) - keys_len(2 bytes) ) / sizeof(type)
+const ID_SIZE: usize = size_of::<u64>();
+const NODETYPE_SIZE: usize = size_of::<u8>();
+pub struct Page {
+    id: Id,
+    nodetype: NodeType,
+}
+
+impl Page {
+    pub fn deserialize(bytes: &[u8]) -> Result<Page, PageError> {
+        if bytes.len() != PAGESIZE as usize {
+            return Err(PageError::Pagesize(bytes.len()));
+        }
+
+        let (input, (id, nodetype)) = (u64(Endianness::Little), u8()).parse(bytes)?;
+
+        let nodetype = match nodetype {
+            0x01 => NodeType::Node(Node::deserialize(input)?),
+            0x02 => NodeType::Leaf(Leaf::deserialize(input)?),
+            0x03 => NodeType::Data(Data::deserialize(input)?),
+            _ => return Err(PageError::Keytype(nodetype)),
+        };
+
+        Ok(Page { id, nodetype })
+    }
+
+    pub fn serialize(self) -> Vec<u8> {
+        let mut b: Vec<u8> = Vec::new();
+
+        self.id.to_le_bytes().iter().for_each(|byte| b.push(*byte));
+
+        match self.nodetype {
+            NodeType::Node(node) => node.serialize().iter().for_each(|byte| b.push(*byte)),
+            NodeType::Leaf(leaf) => leaf.serialize().iter().for_each(|byte| b.push(*byte)),
+            NodeType::Data(data) => data.serialize().iter().for_each(|byte| b.push(*byte)),
+        }
+
+        b
+    }
+}
 
 #[derive(Debug)]
 pub struct Node {
-    id: Id,             // 0..=7
-    nodetype: NodeType, // 8
     keytype: KeyType,
     keys_len: u8,
-    keys: Vec<Vec<u8>>, // n
-    pointers: Vec<u64>, // n + 1
+    keys: Vec<Vec<u8>>, //
+    pointers: Vec<u64>, //
 }
 
 impl Node {
-    pub fn deserialize(bytes: &[u8]) -> Result<Node, DatabaseError> {
-        if bytes.len() != PAGESIZE as usize {
-            return Err(DatabaseError::Pagesize(bytes.len()));
+    pub fn deserialize(bytes: &[u8]) -> Result<Node, PageError> {
+        if bytes.len() != PAGESIZE as usize - ID_SIZE - NODETYPE_SIZE {
+            return Err(PageError::Pagesize(bytes.len()));
         }
 
-        let (input, (id, nodetype, keytype, keys_len)) =
-            (u64(Endianness::Little), u8(), u8(), u8()).parse(bytes)?;
-
-        let nodetype = match nodetype {
-            0x01 => NodeType::Root,
-            0x02 => NodeType::Node,
-            0x03 => NodeType::Leaf,
-            _ => return Err(DatabaseError::NodeType(nodetype)),
-        };
+        let (input, (keytype, keys_len)) = (u8(), u8()).parse(bytes)?;
 
         let keytype = match keytype {
             0x01 => KeyType::String,
             0x02 => KeyType::UInt64,
-            _ => return Err(DatabaseError::Keytype(keytype)),
+            _ => return Err(PageError::Keytype(keytype)),
         };
 
         let (input, keys) = match keytype {
             KeyType::String => count(length_count(u8(), u8()), keys_len as usize).parse(input)?,
             KeyType::UInt64 => count(count(u8(), 8), keys_len as usize).parse(input)?,
-            _ => return Err(DatabaseError::Keytype(0x00)),
         };
 
         let (_input, pointers) =
             count(u64(Endianness::Little), keys_len as usize + 1).parse(input)?;
 
         Ok(Node {
-            id,
-            nodetype,
             keytype,
             keys_len,
             keys,
@@ -165,6 +207,51 @@ impl Node {
     }
 
     pub fn serialize(self) -> Vec<u8> {
+        let mut b: Vec<u8> = Vec::new();
+
+        b.push(0x01);
+
+        match self.keytype {
+            KeyType::String => {
+                b.push(0x01);
+                for key in self.keys {
+                    b.push(key.len() as u8);
+                    key.iter().for_each(|x| b.push(*x));
+                }
+            }
+            KeyType::UInt64 => {
+                b.push(0x02);
+                for key in self.keys {
+                    key.iter().for_each(|x| b.push(*x));
+                }
+            }
+        }
+
+        b.push(self.keys_len);
+
+        self.pointers
+            .iter()
+            .for_each(|p| p.to_le_bytes().iter().for_each(|byte| b.push(*byte)));
+
+        b
+    }
+}
+
+#[derive(Debug)]
+pub struct Leaf {
+    keytype: KeyType,
+    keys_len: u8,
+    keys: Vec<Vec<u8>>,
+    pointers: Vec<u64>,
+    next_leaf_pointer: u8,
+}
+
+impl Leaf {
+    pub fn serialize(self) -> Vec<u8> {
+        todo!()
+    }
+
+    pub fn deserialize(bytes: &[u8]) -> Result<Leaf, PageError> {
         todo!()
     }
 }
@@ -183,118 +270,17 @@ impl Data {
         todo!()
     }
 
-    fn deserialize(bytes: &[u8]) -> Data {
+    fn deserialize(bytes: &[u8]) -> Result<Data, PageError> {
         todo!()
     }
 }
 
-// keytype      field_len   field       primary     data_len    data
-// keytype      u8         string       bool        u16         [u8]
-
 #[derive(Debug)]
-struct Field {
-    field: Vec<u8>,
-    keytype: KeyType,
+pub struct Field {
+    keysize: u8,
+    key: Vec<u8>,
+    datasize: u8,
     data: Vec<u8>,
-}
-
-impl Field {
-    fn new(field: &str, keytype: KeyType, data: Vec<u8>) -> Field {
-        Self {
-            field: field.as_bytes().into(),
-            keytype,
-            data,
-        }
-    }
-
-    // fn serialize(self) -> Result<Vec<u8>, DatabaseError> {
-    //     let mut vec: Vec<u8> = Vec::new();
-    //
-    //     let len = match self.keytype {
-    //         KeyType::String(n) => {
-    //             vec.push(0x01);
-    //             if n as usize > size_of::<u8>() {
-    //                 return Err(DatabaseError::Fieldsize(n as usize));
-    //             }
-    //             n
-    //         }
-    //         KeyType::UInt64 => {
-    //             vec.push(0x02);
-    //             size_of::<u64>().try_into().unwrap()
-    //         }
-    //     };
-    //
-    //     vec.push(len);
-    //
-    //     for b in self.field {
-    //         vec.push(b);
-    //     }
-    //
-    //     u16::to_le_bytes(self.data.len() as u16)
-    //         .iter()
-    //         .for_each(|b| vec.push(*b));
-    //
-    //     self.data.iter().for_each(|b| vec.push(*b));
-    //
-    //     Ok(vec)
-    // }
-
-    // keytype      field_len   field       data_len    data
-    // keytype      u8         string       u32         [u8]
-
-    // this should just use nom, because this is getting stupid at this point
-    // fn deserialize(bytes: &[u8]) -> Result<Field, DatabaseError> {
-    //     let keytype = match bytes.index(0) {
-    //         0x01 => (KeyType::String, *bytes.index(1)),
-    //         0x02 => (KeyType::UInt64, *bytes.index(1)),
-    //         _ => return Err(DatabaseError::Keytype(*bytes.index(0))),
-    //     };
-    //
-    //     let field_len = bytes.index(2);
-    //     let field = &bytes[3..(*field_len + 3)
-    //         .try_into()
-    //         .expect("couldnt parse field_len")];
-    //     let data_len = bytes.index(*field_len as usize + 4);
-    //     let data = &bytes[*field_len as usize + 5..*data_len as usize + *field_len as usize + 5]; // what
-    //     // is this?
-    //
-    //     Ok(Self {
-    //         field: field.to_vec(),
-    //         keytype,
-    //         data: data.to_vec(),
-    //     })
-    // }
-}
-
-pub struct DataBuilder {
-    id: Id,
-    fields: Vec<Field>,
-}
-
-impl DataBuilder {
-    pub fn new(id: Id) -> DataBuilder {
-        Self {
-            id,
-            fields: Vec::new(),
-        }
-    }
-
-    pub fn field(
-        mut self,
-        name: &str,
-        keytype: KeyType,
-        data: Vec<u8>,
-    ) -> Result<DataBuilder, DatabaseError> {
-        self.fields.push(Field::new(name, keytype, data));
-        Ok(self)
-    }
-
-    pub fn build(self) -> Data {
-        Data {
-            id: self.id,
-            fields: self.fields,
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -305,13 +291,13 @@ pub enum KeyType {
 
 #[derive(Debug)]
 pub enum NodeType {
-    Root, // 0x01
-    Node, // 0x02
-    Leaf, // 0x03
+    Node(Node), // 0x01
+    Leaf(Leaf), // 0x02
+    Data(Data), //0x03
 }
 
 #[derive(Error, Debug)]
-pub enum DatabaseError {
+pub enum PageError {
     #[error("page was not 4096 bytes ({0})")]
     Pagesize(usize),
 
@@ -320,12 +306,6 @@ pub enum DatabaseError {
 
     #[error("node type was not correct")]
     NodeType(u8),
-
-    #[error("data already contains a primary key ({0})")]
-    Fieldname(String),
-
-    #[error("field was too big ({0})")]
-    Fieldsize(usize),
 
     #[error("did not write exact bytes ({0})")]
     WriteBytesExact(usize),
@@ -340,118 +320,8 @@ pub enum DatabaseError {
     Nom(nom::Err<nom::error::Error<Vec<u8>>>),
 }
 
-impl From<nom::Err<nom::error::Error<&[u8]>>> for DatabaseError {
+impl From<nom::Err<nom::error::Error<&[u8]>>> for PageError {
     fn from(err: nom::Err<nom::error::Error<&[u8]>>) -> Self {
         Self::Nom(err.map_input(|input| input.to_vec()))
     }
 }
-
-// pub struct Database {
-//     file: File,
-// }
-//
-// impl Database {
-//     pub fn new(name: &str) -> Result<Self, DatabaseError> {
-//         let mut h = Self {
-//             file: OpenOptions::new()
-//                 .create(true)
-//                 .truncate(false)
-//                 .write(true)
-//                 .read(true)
-//                 .open(format!("./{name}"))
-//                 .unwrap(),
-//         };
-//
-//         if h.file.metadata()?.len() == 0 {
-//             h.write(&[0x00; PAGESIZE as usize])?;
-//         }
-//
-//         Ok(h)
-//     }
-//
-//     pub fn new_test(name: &str) -> Result<Self, DatabaseError> {
-//         let mut h = Self {
-//             file: OpenOptions::new()
-//                 .create(true)
-//                 .truncate(true)
-//                 .write(true)
-//                 .read(true)
-//                 .open(format!("test/{name}"))
-//                 .unwrap(),
-//         };
-//
-//         if h.file.metadata()?.len() == 0 {
-//             h.write(&[0x00; PAGESIZE as usize])?;
-//         }
-//
-//         Ok(h)
-//     }
-//
-//     pub fn new_page(&mut self) -> Result<Id, DatabaseError> {
-//         let id = self.file.seek(SeekFrom::End(0))?;
-//         self.write(&[0x00; PAGESIZE as usize])?;
-//         Ok((id / PAGESIZE) - 1)
-//     }
-//
-//     pub fn write(&mut self, buf: &[u8]) -> Result<(), DatabaseError> {
-//         self.file.seek(SeekFrom::End(0))?;
-//         self.file.write_all(buf)?;
-//         Ok(())
-//     }
-//
-//     pub fn write_to_page(&mut self, id: Id, buf: &[u8]) -> Result<bool, DatabaseError> {
-//         if id <= self.get_max_id()? {
-//             let pos = PAGESIZE + (PAGESIZE * id);
-//             self.file.seek(SeekFrom::Start(pos))?;
-//             self.file.write_all(buf)?;
-//             return Ok(true);
-//         }
-//         Ok(false)
-//     }
-//
-//     pub fn write_to_header(&mut self, buf: &[u8]) -> Result<(), DatabaseError> {
-//         self.file.rewind()?;
-//         self.file.write_all(buf)?;
-//         Ok(())
-//     }
-//
-//     pub fn read_all(&mut self) -> Result<Vec<u8>, DatabaseError> {
-//         let mut buf = Vec::new();
-//         self.file.rewind()?;
-//         self.file.read_to_end(&mut buf)?;
-//         Ok(buf)
-//     }
-//
-//     pub fn read_page(&mut self, id: Id) -> Result<Vec<u8>, DatabaseError> {
-//         let pos = PAGESIZE + (PAGESIZE * id);
-//         let mut buf: [u8; PAGESIZE as usize] = [0x00; PAGESIZE as usize];
-//         self.file.seek(SeekFrom::Start(pos))?;
-//         self.file.read_exact(&mut buf)?;
-//         Ok(buf.to_vec())
-//     }
-//
-//     pub fn read_header(&mut self) -> Result<Vec<u8>, DatabaseError> {
-//         let mut buf: [u8; PAGESIZE as usize] = [0x00; PAGESIZE as usize];
-//         self.file.rewind()?;
-//         self.file.read_exact(&mut buf)?;
-//         Ok(buf.to_vec())
-//     }
-//
-//     pub fn get_max_id(&mut self) -> Result<u64, DatabaseError> {
-//         let len = self.file.metadata()?.len();
-//         Ok((len / PAGESIZE) - 1)
-//     }
-// }
-
-// pub fn get_max_id<T: Write + Read + Seek>(source: &mut T) -> Result<u64, DatabaseError> {
-//     source.rewind()?;
-//     let len = source.read_to_end(&mut Vec::new())?;
-//     Ok((len / PAGESIZE as usize) - 1)
-// }
-//
-// pub fn read_all<T: Write + Read + Seek>(source: &mut T) -> Result<Vec<u8>, DatabaseError> {
-//     let mut buf = Vec::new();
-//     source.rewind()?;
-//     source.read_to_end(&mut buf)?;
-//     Ok(buf)
-// }
