@@ -1,11 +1,26 @@
-mod database;
-use database::{Data, DataBuilder, Database, DatabaseError, Header, KeyType, Node};
-use std::error::Error;
+mod fileutil;
+use fileutil::{DatabaseError, Header, KeyType, Node, PageHandler, Pageable};
+use std::{
+    fs::OpenOptions,
+    io::{Cursor, Read, Seek, Write},
+};
+
+impl<T: Write + Read + Seek> Pageable<T> for Vec<u8> {}
 
 fn main() -> Result<(), DatabaseError> {
-    let mut handler = Database::new_test("test")?;
+    // let mut file = OpenOptions::new()
+    //     .create(true)
+    //     .truncate(true)
+    //     .write(true)
+    //     .read(true)
+    //     .open("test/test")
+    //     .unwrap();
+    // file.write_all(&[0x00; 4096])?;
 
-    let page_id = dbg!(handler.new_page()?);
+    let mut lol = Cursor::new(Vec::<u8>::new());
+    lol.write_all(&[0x00; 4096])?;
+
+    let page_id = dbg!(PageHandler::new_page(&mut lol)?);
 
     let mut header = Header {
         elements: 909090,
@@ -13,9 +28,9 @@ fn main() -> Result<(), DatabaseError> {
         keytype_size: 10,
     };
 
-    handler.write_to_header(&header.serialize())?;
+    PageHandler::write_to_header(&mut lol, &header.serialize())?;
 
-    dbg!(Header::deserialize(&handler.read_header()?))?;
+    dbg!(Header::deserialize(&PageHandler::read_header(&mut lol)?))?;
 
     let mut b: Vec<u8> = Vec::new();
     for i in page_id.to_le_bytes() {
@@ -46,9 +61,11 @@ fn main() -> Result<(), DatabaseError> {
         b.push(æ);
     }
 
-    handler.write_to_page(page_id, &b)?;
+    dbg!(PageHandler::write_to_page(&mut lol, page_id, &b))?;
 
-    dbg!(Node::deserialize(&handler.read_page(page_id)?)?);
+    dbg!(Node::deserialize(&PageHandler::read_page(
+        &mut lol, page_id
+    )?)?);
 
     Ok(())
 }
