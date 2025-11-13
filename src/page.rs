@@ -1,7 +1,7 @@
 use nom::Parser;
 use nom::multi::{count, length_count};
 use nom::number::{Endianness, u8, u64};
-use std::io::{Read, Seek, SeekFrom, Write};
+use std::io::{Cursor, Read, Seek, SeekFrom, Write};
 use thiserror::Error;
 
 // NOTE: LITTLE ENDIAN BYTES
@@ -255,6 +255,22 @@ pub struct Leaf {
     next_leaf_pointer: u8,
 }
 
+impl Leaf {
+    fn from_node(node: Node) -> Leaf {
+        Leaf {
+            keytype: node.keytype,
+            keys_len: node.keys_len,
+            keys: node.keys,
+            pointers: node.pointers,
+            next_leaf_pointer: 0x00,
+        }
+    }
+
+    fn set_next_leaf_pointer(&mut self, pointer: u8) {
+        self.next_leaf_pointer = pointer
+    }
+}
+
 impl SerializeDeserialize for Leaf {
     fn serialize(self) -> Vec<u8> {
         let mut v = Node::serialize(Node {
@@ -302,19 +318,51 @@ impl SerializeDeserialize for Leaf {
     }
 }
 
+// pub struct Data {
+//     objects_len: u8,
+//     objects: Vec<Object>,
+// }
+
 #[derive(Debug)]
-pub struct Data {
-    id: Id,
+pub struct DataHead {
+    objects_len: u8,
     objects: Vec<Object>,
+    extender: u64,
 }
 
-impl SerializeDeserialize for Data {
+impl SerializeDeserialize for DataHead {
     fn serialize(self) -> Vec<u8> {
         todo!()
     }
 
-    fn deserialize(bytes: &[u8]) -> Result<Data, PageError> {
+    fn deserialize(bytes: &[u8]) -> Result<DataHead, PageError> {
         todo!()
+    }
+}
+
+#[derive(Debug)]
+pub struct DataExtend {
+    data: Vec<u8>,
+    extender: u64,
+}
+
+impl SerializeDeserialize for DataExtend {
+    fn serialize(self) -> Vec<u8> {
+        todo!()
+    }
+
+    fn deserialize(bytes: &[u8]) -> Result<DataExtend, PageError> {
+        let (_input, extender) = (u64(Endianness::Little)).parse(bytes)?;
+
+        let mut data: Vec<u8> = Vec::new();
+        let mut cursor = Cursor::new(bytes);
+        cursor.seek(SeekFrom::Start(size_of::<u64>().try_into()?));
+        cursor.read_to_end(&mut data);
+
+        match data.len() == PAGESIZE as usize - size_of::<u64>() {
+            true => todo!(),
+            false => todo!(),
+        }
     }
 }
 
@@ -348,13 +396,17 @@ impl Field {}
 pub enum KeyType {
     String, // 0x01
     UInt64, // 0x02
+
+            // Int64,   // 0x03
+            // Float64, // 0x04,
+            // Float32, // 0x05
 }
 
 #[derive(Debug)]
 pub enum NodeType {
     Node(Node), // 0x01
     Leaf(Leaf), // 0x02
-    Data(Data), //0x03
+    Data(Data), // 0x03
 }
 
 #[derive(Error, Debug)]
@@ -376,6 +428,9 @@ pub enum PageError {
 
     #[error("failed to read or write from file: ({0})")]
     Io(#[from] std::io::Error),
+
+    #[error("couldnt convert to int ({0})")]
+    TryFromInt(#[from] std::num::TryFromIntError),
 
     #[error("nom failed parsing")]
     Nom(nom::Err<nom::error::Error<Vec<u8>>>),
