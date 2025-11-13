@@ -1,5 +1,5 @@
 mod page;
-use page::{Header, KeyType, Node, PageError, PageHandler, Pageable};
+use page::{Header, KeyType, Node, Page, PageError, PageHandler, Pageable, SerializeDeserialize};
 use std::io::{Cursor, Write};
 
 fn main() -> Result<(), PageError> {
@@ -60,9 +60,14 @@ fn main() -> Result<(), PageError> {
 
     dbg!(PageHandler::write_to_page(&mut lol, page_id, &b))?;
 
-    dbg!(Node::deserialize(&PageHandler::read_page(
-        &mut lol, page_id
-    )?)?);
+    // let k = Node::deserialize(&PageHandler::read_page(&mut lol, page_id)?);
+
+    let node = Page::deserialize(&PageHandler::read_page(&mut lol, page_id)?);
+
+    match node {
+        Ok(n) => println!("{n:#?}"),
+        Err(e) => println!("{e}"),
+    }
 
     Ok(())
 }

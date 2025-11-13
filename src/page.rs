@@ -61,6 +61,11 @@ impl<T: Write + Read + Seek> Pageable<T> for PageHandler {
     }
 }
 
+pub trait SerializeDeserialize: Sized {
+    fn serialize(self) -> Vec<u8>;
+    fn deserialize(bytes: &[u8]) -> Result<Self, PageError>;
+}
+
 #[derive(Debug)]
 pub struct Header {
     pub elements: u64,
@@ -70,10 +75,10 @@ pub struct Header {
     pub order: u8,
 }
 
-impl Header {
-    pub fn deserialize(bytes: &[u8]) -> Result<Header, PageError> {
+impl SerializeDeserialize for Header {
+    fn deserialize(bytes: &[u8]) -> Result<Header, PageError> {
         if bytes.len() != PAGESIZE as usize {
-            return Err(PageError::Pagesize(bytes.len()));
+            return Err(PageError::Pagesize(PAGESIZE as usize, bytes.len()));
         }
 
         let (_, (elements, keytype, keytype_size, root, order)) = (
@@ -100,7 +105,7 @@ impl Header {
         })
     }
 
-    pub fn serialize(&mut self) -> Vec<u8> {
+    fn serialize(self) -> Vec<u8> {
         let mut b = Vec::<u8>::new();
 
         for (idx, byte) in self.elements.to_le_bytes().iter().enumerate() {
@@ -130,15 +135,19 @@ impl Header {
 
 const ID_SIZE: usize = size_of::<u64>();
 const NODETYPE_SIZE: usize = size_of::<u8>();
+
+const PAGESIZE_NO_HEADER: usize = PAGESIZE as usize - ID_SIZE - NODETYPE_SIZE;
+
+#[derive(Debug)]
 pub struct Page {
     id: Id,
     nodetype: NodeType,
 }
 
-impl Page {
-    pub fn deserialize(bytes: &[u8]) -> Result<Page, PageError> {
+impl SerializeDeserialize for Page {
+    fn deserialize(bytes: &[u8]) -> Result<Page, PageError> {
         if bytes.len() != PAGESIZE as usize {
-            return Err(PageError::Pagesize(bytes.len()));
+            return Err(PageError::Pagesize(PAGESIZE as usize, bytes.len()));
         }
 
         let (input, (id, nodetype)) = (u64(Endianness::Little), u8()).parse(bytes)?;
@@ -153,7 +162,7 @@ impl Page {
         Ok(Page { id, nodetype })
     }
 
-    pub fn serialize(self) -> Vec<u8> {
+    fn serialize(self) -> Vec<u8> {
         let mut b: Vec<u8> = Vec::new();
 
         self.id.to_le_bytes().iter().for_each(|byte| b.push(*byte));
@@ -176,10 +185,10 @@ pub struct Node {
     pointers: Vec<u64>, //
 }
 
-impl Node {
-    pub fn deserialize(bytes: &[u8]) -> Result<Node, PageError> {
-        if bytes.len() != PAGESIZE as usize - ID_SIZE - NODETYPE_SIZE {
-            return Err(PageError::Pagesize(bytes.len()));
+impl SerializeDeserialize for Node {
+    fn deserialize(bytes: &[u8]) -> Result<Node, PageError> {
+        if bytes.len() != PAGESIZE_NO_HEADER {
+            return Err(PageError::Pagesize(PAGESIZE_NO_HEADER, bytes.len()));
         }
 
         let (input, (keytype, keys_len)) = (u8(), u8()).parse(bytes)?;
@@ -206,7 +215,7 @@ impl Node {
         })
     }
 
-    pub fn serialize(self) -> Vec<u8> {
+    fn serialize(self) -> Vec<u8> {
         let mut b: Vec<u8> = Vec::new();
 
         b.push(0x01);
@@ -246,31 +255,81 @@ pub struct Leaf {
     next_leaf_pointer: u8,
 }
 
-impl Leaf {
-    pub fn serialize(self) -> Vec<u8> {
-        todo!()
+impl SerializeDeserialize for Leaf {
+    fn serialize(self) -> Vec<u8> {
+        let mut v = Node::serialize(Node {
+            keytype: self.keytype,
+            keys_len: self.keys_len,
+            keys: self.keys,
+            pointers: self.pointers,
+        });
+
+        v.push(self.next_leaf_pointer);
+
+        v
     }
 
-    pub fn deserialize(bytes: &[u8]) -> Result<Leaf, PageError> {
-        todo!()
+    fn deserialize(bytes: &[u8]) -> Result<Leaf, PageError> {
+        if bytes.len() != PAGESIZE_NO_HEADER {
+            return Err(PageError::Pagesize(PAGESIZE_NO_HEADER, bytes.len()));
+        }
+
+        let (input, (keytype, keys_len)) = (u8(), u8()).parse(bytes)?;
+
+        let keytype = match keytype {
+            0x01 => KeyType::String,
+            0x02 => KeyType::UInt64,
+            _ => return Err(PageError::Keytype(keytype)),
+        };
+
+        let (input, keys) = match keytype {
+            KeyType::String => count(length_count(u8(), u8()), keys_len as usize).parse(input)?,
+            KeyType::UInt64 => count(count(u8(), 8), keys_len as usize).parse(input)?,
+        };
+
+        let (input, pointers) =
+            count(u64(Endianness::Little), keys_len as usize + 1).parse(input)?;
+
+        let (_input, next_leaf_pointer) = u8().parse(input)?;
+
+        Ok(Leaf {
+            keytype,
+            keys_len,
+            keys,
+            pointers,
+            next_leaf_pointer,
+        })
     }
 }
-
-// id   fields_len | field_n_len field_n
-// Id   u16          u16         field
 
 #[derive(Debug)]
 pub struct Data {
     id: Id,
-    fields: Vec<Field>,
+    objects: Vec<Object>,
 }
 
-impl Data {
+impl SerializeDeserialize for Data {
     fn serialize(self) -> Vec<u8> {
         todo!()
     }
 
     fn deserialize(bytes: &[u8]) -> Result<Data, PageError> {
+        todo!()
+    }
+}
+
+#[derive(Debug)]
+pub struct Object {
+    fields_len: u8,
+    fields: Vec<Field>,
+}
+
+impl SerializeDeserialize for Object {
+    fn serialize(self) -> Vec<u8> {
+        todo!()
+    }
+
+    fn deserialize(bytes: &[u8]) -> Result<Object, PageError> {
         todo!()
     }
 }
@@ -282,6 +341,8 @@ pub struct Field {
     datasize: u8,
     data: Vec<u8>,
 }
+
+impl Field {}
 
 #[derive(Debug)]
 pub enum KeyType {
@@ -298,8 +359,8 @@ pub enum NodeType {
 
 #[derive(Error, Debug)]
 pub enum PageError {
-    #[error("page was not 4096 bytes ({0})")]
-    Pagesize(usize),
+    #[error("page was not the correct size (expected {0}, found {1})")]
+    Pagesize(usize, usize),
 
     #[error("keytype could not be parsed ({0})")]
     Keytype(u8),
