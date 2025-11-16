@@ -181,8 +181,8 @@ impl SerializeDeserialize for Page {
 pub struct Node {
     keytype: KeyType,
     keys_len: u8,
-    keys: Vec<Vec<u8>>, //
-    pointers: Vec<u64>, //
+    keys: Vec<Vec<u8>>,
+    pointers: Vec<u64>,
 }
 
 impl SerializeDeserialize for Node {
@@ -318,67 +318,74 @@ impl SerializeDeserialize for Leaf {
     }
 }
 
-// pub struct Data {
-//     objects_len: u8,
-//     objects: Vec<Object>,
-// }
-
+// extend should be a vec of pointers, and then the tree can handle data pointers via the
+// pagehandler
 #[derive(Debug)]
-pub struct DataHead {
-    objects_len: u8,
-    objects: Vec<Object>,
-    extender: u64,
+pub struct Data {
+    extend: u64,
+    objects: Vec<Vec<Field>>,
 }
 
-impl SerializeDeserialize for DataHead {
+impl SerializeDeserialize for Data {
     fn serialize(self) -> Vec<u8> {
-        todo!()
+        let mut bytes = Vec::new();
+        self.extend
+            .to_le_bytes()
+            .iter()
+            .for_each(|b| bytes.push(*b));
+
+        for object in self.objects {
+            bytes.push(object.len().try_into().expect("couldnt parse object len"));
+            for field in object {
+                let f = Field::serialize(field);
+                bytes.push(f.len().try_into().expect("couldnt parse field len"));
+                f.iter().for_each(|b| bytes.push(*b));
+            }
+        }
+
+        bytes
     }
 
-    fn deserialize(bytes: &[u8]) -> Result<DataHead, PageError> {
+    fn deserialize(bytes: &[u8]) -> Result<Data, PageError> {
         todo!()
     }
 }
 
+// this should not exist
 #[derive(Debug)]
 pub struct DataExtend {
+    extend: u64,
     data: Vec<u8>,
-    extender: u64,
 }
 
 impl SerializeDeserialize for DataExtend {
     fn serialize(self) -> Vec<u8> {
-        todo!()
+        let mut bytes = Vec::new();
+        self.extend
+            .to_le_bytes()
+            .iter()
+            .for_each(|b| bytes.push(*b));
+
+        self.data.iter().for_each(|b| bytes.push(*b));
+
+        bytes
     }
 
     fn deserialize(bytes: &[u8]) -> Result<DataExtend, PageError> {
-        let (_input, extender) = (u64(Endianness::Little)).parse(bytes)?;
+        let (_, extend) = (u64(Endianness::Little)).parse(bytes)?;
 
         let mut data: Vec<u8> = Vec::new();
         let mut cursor = Cursor::new(bytes);
-        cursor.seek(SeekFrom::Start(size_of::<u64>().try_into()?));
-        cursor.read_to_end(&mut data);
+        cursor.seek(SeekFrom::Start(size_of::<u64>().try_into()?))?;
+        cursor.read_to_end(&mut data)?;
 
         match data.len() == PAGESIZE as usize - size_of::<u64>() {
-            true => todo!(),
-            false => todo!(),
+            true => Ok(DataExtend { data, extend }),
+            false => Err(PageError::Pagesize(
+                data.len(),
+                PAGESIZE as usize - size_of::<u64>(),
+            )),
         }
-    }
-}
-
-#[derive(Debug)]
-pub struct Object {
-    fields_len: u8,
-    fields: Vec<Field>,
-}
-
-impl SerializeDeserialize for Object {
-    fn serialize(self) -> Vec<u8> {
-        todo!()
-    }
-
-    fn deserialize(bytes: &[u8]) -> Result<Object, PageError> {
-        todo!()
     }
 }
 
@@ -390,7 +397,34 @@ pub struct Field {
     data: Vec<u8>,
 }
 
-impl Field {}
+impl SerializeDeserialize for Field {
+    fn serialize(self) -> Vec<u8> {
+        let mut bytes = Vec::new();
+
+        bytes.push(self.keysize);
+        self.key.iter().for_each(|b| bytes.push(*b));
+
+        bytes.push(self.datasize);
+        self.data.iter().for_each(|b| bytes.push(*b));
+
+        bytes
+    }
+
+    fn deserialize(bytes: &[u8]) -> Result<Field, PageError> {
+        let (input, keysize) = u8().parse(bytes)?;
+        let (input, key) = count(u8(), keysize as usize).parse(input)?;
+
+        let (input, datasize) = u8().parse(input)?;
+        let (_, data) = count(u8(), datasize as usize).parse(input)?;
+
+        Ok(Field {
+            keysize,
+            key,
+            datasize,
+            data,
+        })
+    }
+}
 
 #[derive(Debug)]
 pub enum KeyType {
