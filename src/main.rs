@@ -1,23 +1,23 @@
 mod page;
-use page::{FileError, Header, KeyType, Node, Page, PageHandler, Pageable, SerializeDeserialize};
+use page::*;
+use std::error::Error;
 use std::io::{Cursor, Write};
+use std::io::{Read, Seek};
 
-fn main() -> Result<(), FileError> {
-    // let mut file = OpenOptions::new()
-    //     .create(true)
-    //     .truncate(true)
-    //     .write(true)
-    //     .read(true)
-    //     .open("test/test")
-    //     .unwrap();
-    // file.write_all(&[0x00; 4096])?;
+fn main() -> Result<(), Box<dyn Error>> {
+    let mut db = Database::new(
+        Cursor::new(Vec::<u8>::new()),
+        KeyType::UInt64,
+        size_of::<u64>().try_into().unwrap(),
+    );
+
+    db.init();
+
+    db.insert("1234");
 
     // let mut lol = Cursor::new(Vec::<u8>::new());
     // lol.write_all(&[0x00; 4096])?;
-    //
-    // let page_id = dbg!(PageHandler::new_page(&mut lol)?);
-    //
-    // let mut header = Header {
+    // let header = Header {
     //     elements: 909090,
     //     keytype: KeyType::String,
     //     keytype_size: 10,
@@ -25,8 +25,10 @@ fn main() -> Result<(), FileError> {
     //     root: 0,
     // };
     //
-    // PageHandler::write_to_header(&mut lol, &header.serialize())?;
+    // HeaderHandler::write(&mut lol, header)?;
     //
+    // println!("{:#?}", HeaderHandler::get(&mut lol)?);
+
     // dbg!(Header::deserialize(&PageHandler::read_header(&mut lol)?))?;
     //
     // let mut b: Vec<u8> = Vec::new();
@@ -71,4 +73,70 @@ fn main() -> Result<(), FileError> {
     // }
     //
     Ok(())
+}
+
+struct Database<T: Read + Write + Seek> {
+    source: T,
+    keytype: KeyType,
+    keytype_size: u8,
+    root: usize,
+}
+
+impl<T: Read + Write + Seek> Database<T> {
+    fn new(source: T, keytype: KeyType, keytype_size: u8) -> Database<T> {
+        Database {
+            source,
+            keytype,
+            keytype_size,
+            root: 0,
+        }
+    }
+
+    fn init(&mut self) {
+        let header = Header {
+            elements: 0,
+            keytype: self.keytype,
+            keytype_size: self.keytype_size,
+
+            // this should be dynamic going forward, determined by keytype size
+            order: 4,
+
+            root: self.root.try_into().expect("u64 to usize failure"),
+        };
+
+        HeaderHandler::write(&mut self.source, header).expect("couldnt initialize header");
+
+        let node = Node::new(self.keytype);
+        let _ = PageHandler::new_page(&mut self.source, PageType::Node(node));
+    }
+
+    // takes data in the future
+    fn insert(&mut self, key: &str) -> bool {
+        let mut page = PageHandler::get_page(&mut self.source, self.root.try_into().unwrap())
+            .expect("couldnt get root");
+
+        match page.pagetype {
+            PageType::Node(ref mut node) => match node.keytype {
+                KeyType::String => {
+                    let mut vec: Vec<u8> = Vec::new();
+                    key.bytes().for_each(|byte| vec.push(byte));
+                    node.keys.push(vec);
+                }
+                KeyType::UInt64 => {
+                    if let Ok(v) = key.parse::<usize>() {
+                        let mut vec: Vec<u8> = Vec::new();
+                        v.to_le_bytes().iter().for_each(|byte| vec.push(*byte));
+                        node.keys.push(vec);
+                    } else {
+                        return false;
+                    }
+                }
+            },
+            _ => return false,
+        }
+
+        PageHandler::write(&mut self.source, page).expect("couldnt write page");
+
+        true
+    }
 }
