@@ -604,7 +604,7 @@ mod filehandlertests {
     use super::{FileHandler, FileHandlerFuncs, PAGESIZE};
 
     fn init_file(pages: usize) -> Cursor<Vec<u8>> {
-        Cursor::new(vec![0x00; pages * PAGESIZE as usize])
+        Cursor::new(vec![0x00; pages])
     }
 
     #[test]
@@ -616,7 +616,7 @@ mod filehandlertests {
 
     #[test]
     fn write_page() {
-        let mut file = init_file(2);
+        let mut file = Cursor::new(vec![0x00; PAGESIZE as usize * 2]);
         let result_ok = FileHandler::write_page(&mut file, 0, b"test");
         assert!(result_ok.is_ok());
 
@@ -631,7 +631,7 @@ mod filehandlertests {
 
     #[test]
     fn write_header() {
-        let mut file = init_file(2);
+        let mut file = Cursor::new(vec![0x00; PAGESIZE as usize * 2]);
         let result_ok = FileHandler::write_header(&mut file, b"test");
         assert!(result_ok.is_ok());
 
@@ -646,7 +646,7 @@ mod filehandlertests {
 
     #[test]
     fn read_page() {
-        let mut file = init_file(2);
+        let mut file = Cursor::new(vec![0x00; PAGESIZE as usize * 2]);
         file.seek(std::io::SeekFrom::Start(PAGESIZE)).unwrap();
         file.write_all(b"test").unwrap();
 
@@ -657,7 +657,7 @@ mod filehandlertests {
 
     #[test]
     fn read_header() {
-        let mut file = init_file(2);
+        let mut file = Cursor::new(vec![0x00; PAGESIZE as usize]);
         file.write_all(b"test").unwrap();
 
         let buf = FileHandler::read_header(&mut file);
