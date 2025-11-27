@@ -591,11 +591,6 @@ pub enum HandlerError {
 
 #[cfg(test)]
 mod filehandlertests {
-
-    // fn write_header(source: &mut T, buf: &[u8]) -> Result<(), FileError>;
-    // fn read_page(source: &mut T, id: Id) -> Result<Vec<u8>, FileError>;
-    // fn read_header(source: &mut T) -> Result<Vec<u8>, FileError>;
-
     use std::io::Cursor;
     use std::io::Read;
     use std::io::Seek;
