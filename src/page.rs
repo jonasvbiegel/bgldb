@@ -92,7 +92,13 @@ impl<T: Read + Write + Seek> HeaderHandlerFuncs<T> for HeaderHandler {
     }
 
     fn write(source: &mut T, header: Header) -> Result<(), HandlerError> {
-        FileHandler::write_header(source, &header.serialize())?;
+        let bytes = header.serialize();
+
+        let mut page: [u8; PAGESIZE as usize] = [0x00; PAGESIZE as usize];
+
+        page[..bytes.len()].as_mut().write_all(&bytes)?;
+
+        FileHandler::write_header(source, &page)?;
         Ok(())
     }
 }
@@ -241,7 +247,15 @@ impl SerializeDeserialize for Page {
             return Err(FileError::Pagesize(PAGESIZE as usize, bytes.len()));
         }
 
+        println!("{:#?}", bytes[0..12].to_vec());
+
         let (input, (id, pagetype)) = (u64(Endianness::Little), u8()).parse(bytes)?;
+
+        println!("id {id} pagetype {pagetype}");
+
+        for b in &input[0..10] {
+            println!("{b}")
+        }
 
         let pagetype = match pagetype {
             0x01 => PageType::Node(Node::deserialize(input)?),
@@ -350,13 +364,22 @@ impl SerializeDeserialize for Node {
 
 #[derive(Debug, Clone)]
 pub struct Leaf {
-    keytype: KeyType,
-    keys: Vec<Vec<u8>>,
-    pointers: Vec<u64>,
-    next_leaf_pointer: u8,
+    pub keytype: KeyType,
+    pub keys: Vec<Vec<u8>>,
+    pub pointers: Vec<u64>,
+    pub next_leaf_pointer: u8,
 }
 
 impl Leaf {
+    pub fn new(keytype: KeyType) -> Leaf {
+        Leaf {
+            keytype,
+            keys: Vec::new(),
+            pointers: Vec::new(),
+            next_leaf_pointer: 0,
+        }
+    }
+
     fn from_node(node: Node) -> Leaf {
         Leaf {
             keytype: node.keytype,
@@ -373,15 +396,34 @@ impl Leaf {
 
 impl SerializeDeserialize for Leaf {
     fn serialize(self) -> Vec<u8> {
-        let mut v = Node::serialize(Node {
-            keytype: self.keytype,
-            keys: self.keys,
-            pointers: self.pointers,
-        });
+        let mut b = Vec::new();
+        b.push(0x02);
 
-        v.push(self.next_leaf_pointer);
+        b.push(u8::try_from(self.keys.len()).expect("couldnt parse keys_len"));
 
-        v
+        match self.keytype {
+            KeyType::String => {
+                b.push(0x01);
+                for key in self.keys {
+                    b.push(key.len() as u8);
+                    key.iter().for_each(|x| b.push(*x));
+                }
+            }
+            KeyType::UInt64 => {
+                b.push(0x02);
+                for key in self.keys {
+                    key.iter().for_each(|x| b.push(*x));
+                }
+            }
+        }
+
+        self.pointers
+            .iter()
+            .for_each(|p| p.to_le_bytes().iter().for_each(|byte| b.push(*byte)));
+
+        b.push(self.next_leaf_pointer);
+
+        b
     }
 
     fn deserialize(bytes: &[u8]) -> Result<Leaf, FileError> {
@@ -584,6 +626,9 @@ impl From<nom::Err<nom::error::Error<&[u8]>>> for FileError {
 pub enum HandlerError {
     #[error("file handler error: {0}")]
     FileHandler(#[from] FileError),
+
+    #[error("failed to initialize header")]
+    Io(#[from] std::io::Error),
 
     #[error("expected raw page")]
     GetRawError,
