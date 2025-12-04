@@ -49,16 +49,15 @@ impl<T: Read + Write + Seek> Database<T> {
 
         HeaderHandler::write(&mut self.source, header).expect("couldnt initialize header");
 
-        let node = Leaf::new(self.keytype);
-        let _ = PageHandler::new_page(&mut self.source, PageType::Leaf(node));
+        let node = dbg!(Leaf::new(self.keytype));
+        let _ = dbg!(PageHandler::new_page(
+            &mut self.source,
+            PageType::Leaf(node)
+        ));
     }
 
     // takes data in the future
     fn insert(&mut self, key: &str) -> bool {
-        // let mut page = PageHandler::get_page(&mut self.source, self.root.try_into().unwrap())
-        //     .expect("couldnt get root");
-
-        println!("getting page");
         let mut page = match PageHandler::get_page(&mut self.source, self.root.try_into().unwrap())
         {
             Ok(page) => page,
