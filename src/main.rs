@@ -14,6 +14,20 @@ fn main() -> Result<(), Box<dyn Error>> {
     db.init();
 
     db.insert("1234");
+    db.insert("6969");
+    db.insert("123123123");
+    db.insert("0303030303");
+
+    let page = PageHandler::get_page(&mut db.source, 0);
+
+    println!("{:#?}", page);
+
+    if let PageType::Leaf(leaf) = page.unwrap().pagetype {
+        for k in leaf.keys {
+            let key = usize::from_le_bytes(k.try_into().expect("lol"));
+            println!("{key}");
+        }
+    }
 
     Ok(())
 }
@@ -49,10 +63,10 @@ impl<T: Read + Write + Seek> Database<T> {
 
         HeaderHandler::write(&mut self.source, header).expect("couldnt initialize header");
 
-        let node = dbg!(Leaf::new(self.keytype));
+        let leaf = dbg!(Leaf::new(self.keytype));
         let _ = dbg!(PageHandler::new_page(
             &mut self.source,
-            PageType::Leaf(node)
+            PageType::Leaf(leaf)
         ));
     }
 
@@ -62,7 +76,7 @@ impl<T: Read + Write + Seek> Database<T> {
         {
             Ok(page) => page,
             Err(e) => {
-                println!("{e}");
+                println!("insert failure: {e}");
                 return false;
             }
         };

@@ -247,15 +247,7 @@ impl SerializeDeserialize for Page {
             return Err(FileError::Pagesize(PAGESIZE as usize, bytes.len()));
         }
 
-        println!("{:#?}", bytes[0..9].to_vec());
-
         let (input, (id, pagetype)) = (u64(Endianness::Little), u8()).parse(bytes)?;
-
-        println!("id {id} pagetype {pagetype}");
-
-        for b in &input[0..10] {
-            println!("{b}")
-        }
 
         let pagetype = match pagetype {
             0x01 => PageType::Node(Node::deserialize(input)?),
@@ -399,19 +391,19 @@ impl SerializeDeserialize for Leaf {
         let mut b = Vec::new();
         b.push(0x02);
 
-        b.push(u8::try_from(self.keys.len()).expect("couldnt parse keys_len"));
-
         match self.keytype {
             KeyType::String => {
                 b.push(0x01);
-                for key in self.keys {
+                b.push(u8::try_from(self.keys.len()).expect("couldnt parse keys_len"));
+                for key in &self.keys {
                     b.push(key.len() as u8);
                     key.iter().for_each(|x| b.push(*x));
                 }
             }
             KeyType::UInt64 => {
                 b.push(0x02);
-                for key in self.keys {
+                b.push(u8::try_from(self.keys.len()).expect("couldnt parse keys_len"));
+                for key in &self.keys {
                     key.iter().for_each(|x| b.push(*x));
                 }
             }
@@ -673,13 +665,17 @@ mod test {
             let result_ok = FileHandler::write_page(&mut file, 0, b"test");
             assert!(result_ok.is_ok());
 
-            let result_err = FileHandler::write_page(&mut file, 0, &[0x00; PAGESIZE as usize + 1]);
-            assert!(result_err.is_err());
-
             let mut buf: [u8; 4] = [0x00; 4];
             file.seek(std::io::SeekFrom::Start(PAGESIZE)).unwrap();
             file.read_exact(&mut buf).unwrap();
             assert_eq!(&buf, b"test")
+        }
+
+        #[test]
+        fn write_page_err() {
+            let mut file = init_file(2);
+            let result_err = FileHandler::write_page(&mut file, 0, &[0x00; PAGESIZE as usize + 1]);
+            assert!(result_err.is_err());
         }
 
         #[test]
@@ -730,6 +726,16 @@ mod test {
         #[test]
         fn new_page_leaf() {
             let mut file = init_file(1);
+            let _ = HeaderHandler::write(
+                &mut file,
+                Header {
+                    root: 0,
+                    order: 4,
+                    keytype: KeyType::UInt64,
+                    elements: 0,
+                    keytype_size: 8,
+                },
+            );
 
             let pagetype = PageType::Leaf(Leaf::new(KeyType::UInt64));
 
@@ -748,13 +754,69 @@ mod test {
         }
 
         #[test]
-        fn new_page_node() {}
+        fn new_page_node() {
+            let mut file = init_file(1);
+            let _ = HeaderHandler::write(
+                &mut file,
+                Header {
+                    root: 0,
+                    order: 4,
+                    keytype: KeyType::UInt64,
+                    elements: 0,
+                    keytype_size: 8,
+                },
+            );
+
+            let pagetype = PageType::Node(Node::new(KeyType::UInt64));
+
+            let page = PageHandler::new_page(&mut file, pagetype);
+
+            if let Ok(ref page) = page
+                && let PageType::Node(node) = &page.pagetype
+            {
+                assert_eq!(node.keytype, KeyType::UInt64);
+                assert!(node.keys.is_empty());
+                assert!(node.pointers.is_empty());
+            } else if let Err(err) = page {
+                eprintln!("{err}");
+                panic!()
+            }
+        }
 
         #[test]
         fn new_page_raw() {}
 
         #[test]
-        fn get_page() {}
+        fn get_page_leaf() {
+            let mut file = init_file(2);
+            let _ = HeaderHandler::write(
+                &mut file,
+                Header {
+                    root: 0,
+                    order: 4,
+                    keytype: KeyType::UInt64,
+                    elements: 0,
+                    keytype_size: 8,
+                },
+            );
+
+            let _ = file.seek(SeekFrom::Start(PAGESIZE));
+            let _ = file.write_all(&[0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x02]);
+
+            let page = PageHandler::get_page(&mut file, 0);
+
+            if let Ok(ref page) = page
+                && let PageType::Leaf(leaf) = (&page.pagetype)
+            {
+                assert_eq!(leaf.keytype, KeyType::UInt64);
+                assert!(leaf.keys.is_empty());
+                assert!(leaf.pointers.is_empty());
+                assert_eq!(leaf.next_leaf_pointer, 0);
+            } else if let Err(err) = page {
+                eprintln!("{err}");
+                panic!()
+            }
+        }
 
         #[test]
         fn get_raw() {}
@@ -788,7 +850,7 @@ mod test {
             let bytes = leaf.serialize();
 
             let expected = [
-                0x02, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x02, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
             ];
 
             assert_eq!(bytes, expected)
@@ -809,7 +871,7 @@ mod test {
 
             let bytes = leaf.serialize();
 
-            let mut expected: Vec<u8> = vec![0x02, 0x03, 0x02];
+            let mut expected: Vec<u8> = vec![0x02, 0x02, 0x03];
 
             usize::to_le_bytes(1).iter().for_each(|b| expected.push(*b));
             usize::to_le_bytes(2).iter().for_each(|b| expected.push(*b));
@@ -836,7 +898,7 @@ mod test {
 
             let bytes = leaf.serialize();
 
-            let mut expected: Vec<u8> = vec![0x02, 0x03, 0x01];
+            let mut expected: Vec<u8> = vec![0x02, 0x01, 0x03];
 
             expected.push(0x03);
             b"foo".iter().for_each(|b| expected.push(*b));
