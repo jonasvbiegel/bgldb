@@ -1,22 +1,21 @@
+mod handler;
 mod page;
+
+use handler::*;
 use page::*;
 use std::error::Error;
 use std::io::{Cursor, Write};
 use std::io::{Read, Seek};
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let mut db = Database::new(
-        Cursor::new(Vec::<u8>::new()),
-        KeyType::UInt64,
-        size_of::<u64>().try_into().unwrap(),
-    );
+    let mut db = Database::new(Cursor::new(Vec::<u8>::new()), KeyType::String, 10);
 
     db.init();
 
-    db.insert("1234");
-    db.insert("6969");
-    db.insert("123123123");
-    db.insert("0303030303");
+    db.insert("hej");
+    db.insert("farvel");
+    db.insert("foo");
+    db.insert("bar");
 
     let page = PageHandler::get_page(&mut db.source, 0);
 
@@ -24,7 +23,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     if let PageType::Leaf(leaf) = page.unwrap().pagetype {
         for k in leaf.keys {
-            let key = usize::from_le_bytes(k.try_into().expect("lol"));
+            let key = String::from_utf8(k).unwrap();
             println!("{key}");
         }
     }
