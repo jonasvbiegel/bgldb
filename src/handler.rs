@@ -1,6 +1,7 @@
 use crate::page::*;
 use std::io::SeekFrom;
 use std::io::{Read, Seek, Write};
+use thiserror::Error;
 
 const PAGESIZE: u64 = 4096;
 type Id = u64;
@@ -8,7 +9,7 @@ type Id = u64;
 pub trait PageHandlerFuncs<T: Write + Read + Seek> {
     fn new_page(source: &mut T, pagetype: PageType) -> Result<Page, HandlerError>;
     fn get_page(source: &mut T, id: Id) -> Result<Page, HandlerError>;
-    fn get_raw(source: &mut T, id: Id) -> Result<Raw, HandlerError>;
+    // fn get_raw(source: &mut T, id: Id) -> Result<Raw, HandlerError>;
     fn write(source: &mut T, page: Page) -> Result<(), HandlerError>;
 }
 
@@ -28,46 +29,48 @@ impl<T: Write + Read + Seek> PageHandlerFuncs<T> for PageHandler {
         Ok(page)
     }
 
-    fn get_raw(source: &mut T, id: Id) -> Result<Raw, HandlerError> {
-        let page = Page::deserialize(&FileHandler::read_page(source, id)?)?;
-
-        match page.pagetype {
-            PageType::Raw(raw) => Ok(raw),
-            _ => Err(HandlerError::GetRawError),
-        }
-    }
+    // fn get_raw(source: &mut T, id: Id) -> Result<Raw, HandlerError> {
+    //     let page = Page::deserialize(&FileHandler::read_page(source, id)?)?;
+    //
+    //     match page.pagetype {
+    //         PageType::Raw(raw) => Ok(raw),
+    //         _ => Err(HandlerError::GetRawError),
+    //     }
+    // }
 
     fn get_page(source: &mut T, id: Id) -> Result<Page, HandlerError> {
         let page = Page::deserialize(&FileHandler::read_page(source, id)?)?;
 
-        match page.pagetype {
-            PageType::Raw(root) => {
-                let mut bytes: Vec<u8> = Vec::new();
+        Ok(page)
 
-                root.data.iter().for_each(|byte| bytes.push(*byte));
-
-                for pointer in root.pointers {
-                    let raw = PageHandler::get_raw(source, pointer)?;
-                    raw.data.iter().for_each(|byte| bytes.push(*byte));
-                }
-
-                let data = Data::deserialize(&bytes)?;
-
-                Ok(Page {
-                    id,
-                    pagetype: PageType::Data(data),
-                })
-            }
-            _ => Ok(page),
-        }
+        // match page.pagetype {
+        //     PageType::Raw(root) => {
+        //         let mut bytes: Vec<u8> = Vec::new();
+        //
+        //         root.data.iter().for_each(|byte| bytes.push(*byte));
+        //
+        //         for pointer in root.pointers {
+        //             let raw = PageHandler::get_raw(source, pointer)?;
+        //             raw.data.iter().for_each(|byte| bytes.push(*byte));
+        //         }
+        //
+        //         let data = Data::deserialize(&bytes)?;
+        //
+        //         Ok(Page {
+        //             id,
+        //             pagetype: PageType::Data(data),
+        //         })
+        //     }
+        //     _ => Ok(page),
+        // }
     }
 
     fn write(source: &mut T, page: Page) -> Result<(), HandlerError> {
-        match page.pagetype {
-            PageType::Raw(raw) => todo!(),
-            _ => FileHandler::write_page(source, page.id, &page.serialize())?,
-        }
+        // match page.pagetype {
+        //     _ => FileHandler::write_page(source, page.id, &page.serialize())?,
+        // }
 
+        FileHandler::write_page(source, page.id, &page.serialize())?;
         Ok(())
     }
 }
@@ -149,6 +152,15 @@ impl<T: Write + Read + Seek> FileHandlerFuncs<T> for FileHandler {
         source.read_exact(&mut buf)?;
         Ok(buf.to_vec())
     }
+}
+
+#[derive(Error, Debug)]
+pub enum HandlerError {
+    #[error("file handler error: {0}")]
+    FileHandler(#[from] FileError),
+
+    #[error("failed to initialize header")]
+    Io(#[from] std::io::Error),
 }
 
 #[cfg(test)]
@@ -233,11 +245,6 @@ mod test {
 
     mod pagehandlertests {
         use super::*;
-
-        // fn new_page(source: &mut T, pagetype: PageType) -> Result<Page, HandlerError>;
-        // fn get_page(source: &mut T, id: Id) -> Result<Page, HandlerError>;
-        // fn get_raw(source: &mut T, id: Id) -> Result<Raw, HandlerError>;
-        // fn write(source: &mut T, page: Page) -> Result<(), HandlerError>;
 
         #[test]
         fn new_page_leaf() {

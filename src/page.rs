@@ -11,152 +11,6 @@ type Id = u64;
 // maybe we should just always parse to raw, and then in the end parse all raws to a data struct?
 // this could still work with the Data and Raw struct
 
-// pub trait PageHandlerFuncs<T: Write + Read + Seek> {
-//     fn new_page(source: &mut T, pagetype: PageType) -> Result<Page, HandlerError>;
-//     fn get_page(source: &mut T, id: Id) -> Result<Page, HandlerError>;
-//     fn get_raw(source: &mut T, id: Id) -> Result<Raw, HandlerError>;
-//     fn write(source: &mut T, page: Page) -> Result<(), HandlerError>;
-// }
-//
-// pub struct PageHandler;
-// impl<T: Write + Read + Seek> PageHandlerFuncs<T> for PageHandler {
-//     fn new_page(source: &mut T, pagetype: PageType) -> Result<Page, HandlerError> {
-//         let id = FileHandler::new_page(source)?;
-//
-//         let page = Page { id, pagetype };
-//
-//         FileHandler::write_page(source, id, &page.clone().serialize())?;
-//
-//         let mut new_header = HeaderHandler::get(source)?;
-//         new_header.elements += 1;
-//         HeaderHandler::write(source, new_header)?;
-//
-//         Ok(page)
-//     }
-//
-//     fn get_raw(source: &mut T, id: Id) -> Result<Raw, HandlerError> {
-//         let page = Page::deserialize(&FileHandler::read_page(source, id)?)?;
-//
-//         match page.pagetype {
-//             PageType::Raw(raw) => Ok(raw),
-//             _ => Err(HandlerError::GetRawError),
-//         }
-//     }
-//
-//     fn get_page(source: &mut T, id: Id) -> Result<Page, HandlerError> {
-//         let page = Page::deserialize(&FileHandler::read_page(source, id)?)?;
-//
-//         match page.pagetype {
-//             PageType::Raw(root) => {
-//                 let mut bytes: Vec<u8> = Vec::new();
-//
-//                 root.data.iter().for_each(|byte| bytes.push(*byte));
-//
-//                 for pointer in root.pointers {
-//                     let raw = PageHandler::get_raw(source, pointer)?;
-//                     raw.data.iter().for_each(|byte| bytes.push(*byte));
-//                 }
-//
-//                 let data = Data::deserialize(&bytes)?;
-//
-//                 Ok(Page {
-//                     id,
-//                     pagetype: PageType::Data(data),
-//                 })
-//             }
-//             _ => Ok(page),
-//         }
-//     }
-//
-//     fn write(source: &mut T, page: Page) -> Result<(), HandlerError> {
-//         match page.pagetype {
-//             PageType::Raw(raw) => todo!(),
-//             _ => FileHandler::write_page(source, page.id, &page.serialize())?,
-//         }
-//
-//         Ok(())
-//     }
-// }
-//
-// pub trait HeaderHandlerFuncs<T: Write + Read + Seek> {
-//     fn get(source: &mut T) -> Result<Header, HandlerError>;
-//     fn write(source: &mut T, header: Header) -> Result<(), HandlerError>;
-// }
-//
-// pub struct HeaderHandler;
-// impl<T: Read + Write + Seek> HeaderHandlerFuncs<T> for HeaderHandler {
-//     fn get(source: &mut T) -> Result<Header, HandlerError> {
-//         let header = Header::deserialize(&FileHandler::read_header(source)?)?;
-//         Ok(header)
-//     }
-//
-//     fn write(source: &mut T, header: Header) -> Result<(), HandlerError> {
-//         let bytes = header.serialize();
-//
-//         let mut page: [u8; PAGESIZE as usize] = [0x00; PAGESIZE as usize];
-//
-//         page[..bytes.len()].as_mut().write_all(&bytes)?;
-//
-//         FileHandler::write_header(source, &page)?;
-//         Ok(())
-//     }
-// }
-//
-// pub trait FileHandlerFuncs<T: Write + Read + Seek> {
-//     fn new_page(source: &mut T) -> Result<Id, FileError>;
-//     fn write_page(source: &mut T, id: Id, buf: &[u8]) -> Result<(), FileError>;
-//     fn write_header(source: &mut T, buf: &[u8]) -> Result<(), FileError>;
-//     fn read_page(source: &mut T, id: Id) -> Result<Vec<u8>, FileError>;
-//     fn read_header(source: &mut T) -> Result<Vec<u8>, FileError>;
-// }
-//
-// pub struct FileHandler;
-// impl<T: Write + Read + Seek> FileHandlerFuncs<T> for FileHandler {
-//     fn new_page(source: &mut T) -> Result<Id, FileError> {
-//         let id = source.seek(SeekFrom::End(0))?;
-//         let id_write = source.write(&[0x00; PAGESIZE as usize])?;
-//         if id_write != PAGESIZE as usize {
-//             return Err(FileError::WriteBytesExact(id_write));
-//         }
-//         Ok((id / PAGESIZE) - 1)
-//     }
-//
-//     fn write_page(source: &mut T, id: Id, buf: &[u8]) -> Result<(), FileError> {
-//         if buf.len() > PAGESIZE as usize {
-//             return Err(FileError::BiggerBuffer(buf.len()));
-//         }
-//
-//         let pos = PAGESIZE + (PAGESIZE * id);
-//         source.seek(SeekFrom::Start(pos))?;
-//         source.write_all(buf)?;
-//         Ok(())
-//     }
-//
-//     fn write_header(source: &mut T, buf: &[u8]) -> Result<(), FileError> {
-//         if buf.len() > PAGESIZE as usize {
-//             return Err(FileError::BiggerBuffer(buf.len()));
-//         }
-//         source.rewind()?;
-//         source.write_all(buf)?;
-//         Ok(())
-//     }
-//
-//     fn read_page(source: &mut T, id: Id) -> Result<Vec<u8>, FileError> {
-//         let pos = PAGESIZE + (PAGESIZE * id);
-//         let mut buf: [u8; PAGESIZE as usize] = [0x00; PAGESIZE as usize];
-//         source.seek(SeekFrom::Start(pos))?;
-//         source.read_exact(&mut buf)?;
-//         Ok(buf.to_vec())
-//     }
-//
-//     fn read_header(source: &mut T) -> Result<Vec<u8>, FileError> {
-//         let mut buf: [u8; PAGESIZE as usize] = [0x00; PAGESIZE as usize];
-//         source.rewind()?;
-//         source.read_exact(&mut buf)?;
-//         Ok(buf.to_vec())
-//     }
-// }
-
 pub trait SerializeDeserialize: Sized {
     fn serialize(self) -> Vec<u8>;
     fn deserialize(bytes: &[u8]) -> Result<Self, FileError>;
@@ -252,7 +106,7 @@ impl SerializeDeserialize for Page {
             0x01 => PageType::Node(Node::deserialize(input)?),
             0x02 => PageType::Leaf(Leaf::deserialize(input)?),
             0x03 => PageType::Data(Data::deserialize(input)?),
-            0x04 => PageType::Raw(Raw::deserialize(input)?),
+            // 0x04 => PageType::Raw(Raw::deserialize(input)?),
             _ => return Err(FileError::Pagetype(pagetype)),
         };
 
@@ -268,7 +122,7 @@ impl SerializeDeserialize for Page {
             PageType::Node(node) => node.serialize().iter().for_each(|byte| b.push(*byte)),
             PageType::Leaf(leaf) => leaf.serialize().iter().for_each(|byte| b.push(*byte)),
             PageType::Data(data) => data.serialize().iter().for_each(|byte| b.push(*byte)),
-            PageType::Raw(raw) => raw.data.iter().for_each(|byte| b.push(*byte)),
+            // PageType::Raw(raw) => raw.data.iter().for_each(|byte| b.push(*byte)),
         }
 
         b
@@ -460,26 +314,24 @@ impl SerializeDeserialize for Leaf {
 
 #[derive(Debug, Clone)]
 pub struct Data {
-    pointers: Vec<u64>,
-    objects: Vec<Vec<Field>>,
-}
-
-impl Data {
-    fn raw(self) -> Vec<Raw> {
-        todo!()
-    }
+    object: Vec<Field>,
 }
 
 impl SerializeDeserialize for Data {
     fn serialize(self) -> Vec<u8> {
         let mut bytes = Vec::new();
 
-        for object in self.objects {
-            bytes.push(object.len().try_into().expect("couldnt parse object len"));
-            for field in object {
-                let f = field.serialize();
-                bytes.push(f.len().try_into().expect("couldnt parse field len"));
-                f.iter().for_each(|b| bytes.push(*b));
+        bytes.push(
+            self.object
+                .len()
+                .try_into()
+                .expect("couldnt parse object length to u8"),
+        );
+
+        for field in self.object {
+            let f = field.serialize();
+            for byte in f {
+                bytes.push(byte);
             }
         }
 
@@ -487,15 +339,25 @@ impl SerializeDeserialize for Data {
     }
 
     fn deserialize(bytes: &[u8]) -> Result<Data, FileError> {
-        todo!()
+        if bytes.len() != PAGESIZE_NO_HEADER {
+            return Err(FileError::Pagesize(PAGESIZE_NO_HEADER, bytes.len()));
+        }
+
+        let (input, object_len) = u8().parse(bytes)?;
+
+        let (_, fields) = count(length_count(u8(), u8()), object_len.into()).parse(input)?;
+
+        let fields: Result<Vec<Field>, FileError> =
+            fields.into_iter().map(|f| Field::deserialize(&f)).collect();
+
+        Ok(Data { object: fields? })
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct Field {
-    keysize: u8,
     key: Vec<u8>,
-    datasize: u8,
+    datatype: KeyType,
     data: Vec<u8>,
 }
 
@@ -503,79 +365,94 @@ impl SerializeDeserialize for Field {
     fn serialize(self) -> Vec<u8> {
         let mut bytes = Vec::new();
 
-        bytes.push(self.keysize);
-        self.key.iter().for_each(|b| bytes.push(*b));
+        bytes.push(self.key.len().try_into().expect("couldnt parse key len"));
 
-        bytes.push(self.datasize);
-        self.data.iter().for_each(|b| bytes.push(*b));
+        bytes.extend(self.key);
+
+        match self.datatype {
+            KeyType::String => {
+                bytes.push(0x01);
+                bytes.push(self.data.len().try_into().expect("couldnt parse data len"));
+            }
+            KeyType::UInt64 => bytes.push(0x02),
+        }
+
+        bytes.extend(self.data);
 
         bytes
     }
 
     fn deserialize(bytes: &[u8]) -> Result<Field, FileError> {
-        let (input, keysize) = u8().parse(bytes)?;
-        let (input, key) = count(u8(), keysize as usize).parse(input)?;
+        let (input, key) = length_count(u8(), u8()).parse(bytes)?;
 
-        let (input, datasize) = u8().parse(input)?;
-        let (_, data) = count(u8(), datasize as usize).parse(input)?;
+        let (input, datatype) = u8().parse(input)?;
+
+        let datatype = match datatype {
+            0x01 => KeyType::String,
+            0x02 => KeyType::UInt64,
+            _ => return Err(FileError::Keytype(datatype)),
+        };
+
+        let (_, data) = match datatype {
+            KeyType::String => length_count(u8(), u8()).parse(input)?,
+            KeyType::UInt64 => count(u8(), 8).parse(input)?,
+        };
 
         Ok(Field {
-            keysize,
             key,
-            datasize,
+            datatype,
             data,
         })
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct Raw {
-    pub pointers: Vec<u64>,
-    pub data: Vec<u8>,
-}
-
-impl Raw {
-    fn new() -> Raw {
-        Raw {
-            pointers: Vec::new(),
-            data: Vec::new(),
-        }
-    }
-}
-
-impl SerializeDeserialize for Raw {
-    fn serialize(self) -> Vec<u8> {
-        let mut bytes: Vec<u8> = Vec::new();
-
-        bytes.push(0x04);
-
-        usize::to_le_bytes(self.pointers.len())
-            .iter()
-            .for_each(|byte| bytes.push(*byte));
-
-        for pointer in self.pointers {
-            u64::to_le_bytes(pointer)
-                .iter()
-                .for_each(|byte| bytes.push(*byte));
-        }
-
-        bytes
-    }
-
-    fn deserialize(bytes: &[u8]) -> Result<Self, FileError> {
-        let (input, pointers_len) = u64(Endianness::Little).parse(bytes)?;
-
-        let (input, pointers) =
-            count(u64(Endianness::Little), pointers_len as usize).parse(input)?;
-
-        Ok(Raw {
-            pointers,
-            data: input.to_vec(),
-        })
-    }
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+// pub struct Raw {
+//     pub pointers: Vec<u64>,
+//     pub data: Vec<u8>,
+// }
+//
+// impl Raw {
+//     fn new() -> Raw {
+//         Raw {
+//             pointers: Vec::new(),
+//             data: Vec::new(),
+//         }
+//     }
+// }
+//
+// impl SerializeDeserialize for Raw {
+//     fn serialize(self) -> Vec<u8> {
+//         let mut bytes: Vec<u8> = Vec::new();
+//
+//         bytes.push(0x04);
+//
+//         usize::to_le_bytes(self.pointers.len())
+//             .iter()
+//             .for_each(|byte| bytes.push(*byte));
+//
+//         for pointer in self.pointers {
+//             u64::to_le_bytes(pointer)
+//                 .iter()
+//                 .for_each(|byte| bytes.push(*byte));
+//         }
+//
+//         bytes
+//     }
+//
+//     fn deserialize(bytes: &[u8]) -> Result<Self, FileError> {
+//         let (input, pointers_len) = u64(Endianness::Little).parse(bytes)?;
+//
+//         let (input, pointers) =
+//             count(u64(Endianness::Little), pointers_len as usize).parse(input)?;
+//
+//         Ok(Raw {
+//             pointers,
+//             data: input.to_vec(),
+//         })
+//     }
+// }
+#[derive(Copy, PartialEq, Eq)]
 pub enum KeyType {
     String, // 0x01
     UInt64, // 0x02
@@ -586,7 +463,6 @@ pub enum PageType {
     Node(Node), // 0x01
     Leaf(Leaf), // 0x02
     Data(Data), // 0x03
-    Raw(Raw),   //0x04
 }
 
 #[derive(Error, Debug)]
@@ -620,18 +496,6 @@ impl From<nom::Err<nom::error::Error<&[u8]>>> for FileError {
     fn from(err: nom::Err<nom::error::Error<&[u8]>>) -> Self {
         Self::Nom(err.map_input(|input| input.to_vec()))
     }
-}
-
-#[derive(Error, Debug)]
-pub enum HandlerError {
-    #[error("file handler error: {0}")]
-    FileHandler(#[from] FileError),
-
-    #[error("failed to initialize header")]
-    Io(#[from] std::io::Error),
-
-    #[error("expected raw page")]
-    GetRawError,
 }
 
 #[cfg(test)]
