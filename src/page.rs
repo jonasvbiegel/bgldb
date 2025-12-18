@@ -1,6 +1,6 @@
-use nom::Parser;
 use nom::multi::{count, length_count};
 use nom::number::{Endianness, u8, u64};
+use nom::{ExtendInto, Parser};
 use thiserror::Error;
 
 // NOTE: LITTLE ENDIAN BYTES
@@ -58,9 +58,7 @@ impl SerializeDeserialize for Header {
     fn serialize(self) -> Vec<u8> {
         let mut b = Vec::<u8>::new();
 
-        for (idx, byte) in self.elements.to_le_bytes().iter().enumerate() {
-            b.insert(idx, *byte);
-        }
+        b.extend(self.elements.to_le_bytes());
 
         match self.keytype {
             KeyType::String => {
@@ -73,9 +71,7 @@ impl SerializeDeserialize for Header {
             }
         }
 
-        for byte in self.root.to_le_bytes() {
-            b.push(byte);
-        }
+        b.extend(self.root.to_le_bytes());
 
         b.push(self.order);
 
@@ -116,14 +112,13 @@ impl SerializeDeserialize for Page {
     fn serialize(self) -> Vec<u8> {
         let mut b: Vec<u8> = Vec::new();
 
-        self.id.to_le_bytes().iter().for_each(|byte| b.push(*byte));
+        b.extend(self.id.to_le_bytes());
 
-        match self.pagetype {
-            PageType::Node(node) => node.serialize().iter().for_each(|byte| b.push(*byte)),
-            PageType::Leaf(leaf) => leaf.serialize().iter().for_each(|byte| b.push(*byte)),
-            PageType::Data(data) => data.serialize().iter().for_each(|byte| b.push(*byte)),
-            // PageType::Raw(raw) => raw.data.iter().for_each(|byte| b.push(*byte)),
-        }
+        b.extend(match self.pagetype {
+            PageType::Node(node) => node.serialize(),
+            PageType::Leaf(leaf) => leaf.serialize(),
+            PageType::Data(data) => data.serialize(),
+        });
 
         b
     }
@@ -179,29 +174,27 @@ impl SerializeDeserialize for Node {
 
         b.push(0x01);
 
-        usize::to_le_bytes(self.keys.len())
-            .iter()
-            .for_each(|byte| b.push(*byte));
+        b.extend(self.keys.len().to_le_bytes());
 
         match self.keytype {
             KeyType::String => {
                 b.push(0x01);
                 for key in self.keys {
                     b.push(key.len() as u8);
-                    key.iter().for_each(|x| b.push(*x));
+                    b.extend(key);
                 }
             }
             KeyType::UInt64 => {
                 b.push(0x02);
                 for key in self.keys {
-                    key.iter().for_each(|x| b.push(*x));
+                    b.extend(key);
                 }
             }
         }
 
-        self.pointers
-            .iter()
-            .for_each(|p| p.to_le_bytes().iter().for_each(|byte| b.push(*byte)));
+        for p in self.pointers {
+            b.extend(p.to_le_bytes());
+        }
 
         b
     }
@@ -250,14 +243,14 @@ impl SerializeDeserialize for Leaf {
                 b.push(u8::try_from(self.keys.len()).expect("couldnt parse keys_len"));
                 for key in &self.keys {
                     b.push(key.len() as u8);
-                    key.iter().for_each(|x| b.push(*x));
+                    b.extend(key);
                 }
             }
             KeyType::UInt64 => {
                 b.push(0x02);
                 b.push(u8::try_from(self.keys.len()).expect("couldnt parse keys_len"));
                 for key in &self.keys {
-                    key.iter().for_each(|x| b.push(*x));
+                    b.extend(key);
                 }
             }
         }
@@ -266,9 +259,11 @@ impl SerializeDeserialize for Leaf {
             .iter()
             .for_each(|p| p.to_le_bytes().iter().for_each(|byte| b.push(*byte)));
 
-        u64::to_le_bytes(self.next_leaf_pointer)
-            .iter()
-            .for_each(|byte| b.push(*byte));
+        for p in self.pointers {
+            b.extend(p.to_le_bytes());
+        }
+
+        b.extend(self.next_leaf_pointer.to_le_bytes());
 
         b
     }

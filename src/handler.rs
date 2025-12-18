@@ -29,40 +29,10 @@ impl<T: Write + Read + Seek> PageHandlerFuncs<T> for PageHandler {
         Ok(page)
     }
 
-    // fn get_raw(source: &mut T, id: Id) -> Result<Raw, HandlerError> {
-    //     let page = Page::deserialize(&FileHandler::read_page(source, id)?)?;
-    //
-    //     match page.pagetype {
-    //         PageType::Raw(raw) => Ok(raw),
-    //         _ => Err(HandlerError::GetRawError),
-    //     }
-    // }
-
     fn get_page(source: &mut T, id: Id) -> Result<Page, HandlerError> {
         let page = Page::deserialize(&FileHandler::read_page(source, id)?)?;
 
         Ok(page)
-
-        // match page.pagetype {
-        //     PageType::Raw(root) => {
-        //         let mut bytes: Vec<u8> = Vec::new();
-        //
-        //         root.data.iter().for_each(|byte| bytes.push(*byte));
-        //
-        //         for pointer in root.pointers {
-        //             let raw = PageHandler::get_raw(source, pointer)?;
-        //             raw.data.iter().for_each(|byte| bytes.push(*byte));
-        //         }
-        //
-        //         let data = Data::deserialize(&bytes)?;
-        //
-        //         Ok(Page {
-        //             id,
-        //             pagetype: PageType::Data(data),
-        //         })
-        //     }
-        //     _ => Ok(page),
-        // }
     }
 
     fn write(source: &mut T, page: Page) -> Result<(), HandlerError> {
@@ -340,9 +310,6 @@ mod test {
                 panic!()
             }
         }
-
-        #[test]
-        fn get_raw() {}
 
         #[test]
         fn write() {}
