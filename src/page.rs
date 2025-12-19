@@ -255,10 +255,6 @@ impl SerializeDeserialize for Leaf {
             }
         }
 
-        self.pointers
-            .iter()
-            .for_each(|p| p.to_le_bytes().iter().for_each(|byte| b.push(*byte)));
-
         for p in self.pointers {
             b.extend(p.to_le_bytes());
         }
@@ -309,7 +305,38 @@ impl SerializeDeserialize for Leaf {
 
 #[derive(Debug, Clone)]
 pub struct Data {
-    object: Vec<Field>,
+    pub object: Vec<Field>,
+}
+
+impl Data {
+    pub fn json(&self) -> String {
+        let mut json = "{\n".to_string();
+
+        for field in &self.object {
+            json.push_str("    ");
+            json.push_str(&field.get_key());
+            json.push_str(": ");
+            match field.datatype {
+                KeyType::String => json.push_str(format!("\"{}\"", field.get_data()).as_str()),
+                KeyType::UInt64 => json.push_str(&field.get_data()),
+            }
+            json.push('\n');
+        }
+
+        json.push('}');
+
+        json
+    }
+
+    pub fn get_key(&self, key: String) -> Option<&Field> {
+        if let Some(field) = self.object.iter().find(|field| {
+            String::from_utf8(field.key.clone()).expect("couldnt parse key to string") == key
+        }) {
+            Some(field)
+        } else {
+            None
+        }
+    }
 }
 
 impl SerializeDeserialize for Data {
@@ -354,6 +381,35 @@ pub struct Field {
     key: Vec<u8>,
     datatype: KeyType,
     data: Vec<u8>,
+}
+
+impl Field {
+    pub fn new(key: Vec<u8>, datatype: KeyType, data: Vec<u8>) -> Field {
+        Field {
+            key,
+            datatype,
+            data,
+        }
+    }
+
+    pub fn get_key(&self) -> String {
+        String::from_utf8(self.key.clone()).expect("couldnt parse key")
+    }
+
+    pub fn get_data(&self) -> String {
+        match self.datatype {
+            KeyType::String => {
+                String::from_utf8(self.data.clone()).expect("couldnt parse data to string")
+            }
+            KeyType::UInt64 => usize::from_le_bytes(
+                self.data
+                    .clone()
+                    .try_into()
+                    .expect("couldnt parse data to usize"),
+            )
+            .to_string(),
+        }
+    }
 }
 
 impl SerializeDeserialize for Field {
@@ -401,53 +457,7 @@ impl SerializeDeserialize for Field {
     }
 }
 
-#[derive(Debug, Clone)]
-// pub struct Raw {
-//     pub pointers: Vec<u64>,
-//     pub data: Vec<u8>,
-// }
-//
-// impl Raw {
-//     fn new() -> Raw {
-//         Raw {
-//             pointers: Vec::new(),
-//             data: Vec::new(),
-//         }
-//     }
-// }
-//
-// impl SerializeDeserialize for Raw {
-//     fn serialize(self) -> Vec<u8> {
-//         let mut bytes: Vec<u8> = Vec::new();
-//
-//         bytes.push(0x04);
-//
-//         usize::to_le_bytes(self.pointers.len())
-//             .iter()
-//             .for_each(|byte| bytes.push(*byte));
-//
-//         for pointer in self.pointers {
-//             u64::to_le_bytes(pointer)
-//                 .iter()
-//                 .for_each(|byte| bytes.push(*byte));
-//         }
-//
-//         bytes
-//     }
-//
-//     fn deserialize(bytes: &[u8]) -> Result<Self, FileError> {
-//         let (input, pointers_len) = u64(Endianness::Little).parse(bytes)?;
-//
-//         let (input, pointers) =
-//             count(u64(Endianness::Little), pointers_len as usize).parse(input)?;
-//
-//         Ok(Raw {
-//             pointers,
-//             data: input.to_vec(),
-//         })
-//     }
-// }
-#[derive(Copy, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum KeyType {
     String, // 0x01
     UInt64, // 0x02
