@@ -31,8 +31,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let node = PageType::Node(Node {
         keytype: KeyType::String,
-        keys: vec![b"jonas".to_vec()],
-        pointers: vec![1],
+        keys: vec![b"jonas".to_vec(), b"xxx".to_vec()],
+        pointers: vec![0, 1, 0],
     });
 
     let leaf = PageType::Leaf(Leaf {
@@ -53,32 +53,32 @@ fn main() -> Result<(), Box<dyn Error>> {
         ],
     });
 
-    println!("{node:#?}");
-    println!("{leaf:#?}");
-    println!("{data:#?}");
+    // let page1 = FileHandler::new_page(&mut db.source)?;
+    // let page2 = FileHandler::new_page(&mut db.source)?;
+    // let page3 = FileHandler::new_page(&mut db.source)?;
 
-    let node_page = Page {
-        id: 0,
-        pagetype: node,
-    };
+    PageHandler::write(
+        &mut db.source,
+        Page {
+            id: 0,
+            pagetype: node,
+        },
+    )
+    .unwrap();
 
-    let leaf_page = Page {
-        id: 1,
-        pagetype: leaf,
-    };
+    // let p = PageHandler::get_page(&mut db.source, 0)?;
+    //
+    // println!("{p:#?}");
 
-    let data_page = Page {
-        id: 2,
-        pagetype: data,
-    };
+    let page2 = PageHandler::new_page(&mut db.source, leaf);
+    let page3 = PageHandler::new_page(&mut db.source, data);
+    println!("{page2:?}");
+    println!("LOOOOL");
+    println!("{page3:?}");
 
-    PageHandler::write(&mut db.source, node_page).unwrap();
-    PageHandler::write(&mut db.source, leaf_page).unwrap();
-    PageHandler::write(&mut db.source, data_page).unwrap();
+    let found = db.get("jonas");
 
-    let find = db.get("jonas");
-
-    println!("{find:?}");
+    println!("{found:?}");
 
     Ok(())
 }
@@ -164,13 +164,16 @@ impl<T: Read + Write + Seek> Database<T> {
     fn get(&mut self, key: &str) -> Result<Data, HandlerError> {
         let mut current_node = self.get_root().expect("couldnt get root");
 
+        println!("current node {current_node:#?}");
+
         while let PageType::Node(ref node) = current_node.pagetype {
-            println!("{current_node:#?}");
+            println!("current node {current_node:#?}");
             let child_id = if let Some(idx) = node
                 .keys
                 .iter()
                 .position(|node_key| node_key > &key.bytes().collect())
             {
+                println!("cooking on {idx}");
                 node.pointers.index(idx)
             } else {
                 node.pointers.last().unwrap()
@@ -178,6 +181,7 @@ impl<T: Read + Write + Seek> Database<T> {
 
             current_node = PageHandler::get_page(&mut self.source, *child_id)?;
         }
+        println!("current node {current_node:#?}");
 
         if let PageType::Leaf(ref leaf) = current_node.pagetype {
             let pointer_id = if let Some(idx) = leaf

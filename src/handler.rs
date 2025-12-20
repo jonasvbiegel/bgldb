@@ -19,7 +19,11 @@ impl<T: Write + Read + Seek> PageHandlerFuncs<T> for PageHandler {
 
         let page = Page { id, pagetype };
 
-        FileHandler::write_page(source, id, &page.clone().serialize())?;
+        let mut buf: [u8; PAGESIZE as usize] = [0x00; PAGESIZE as usize];
+        let bytes = page.clone().serialize();
+        buf[..bytes.len()].as_mut().write_all(&bytes)?;
+
+        FileHandler::write_page(source, id, &buf)?;
 
         let mut new_header = HeaderHandler::get(source)?;
         new_header.elements += 1;

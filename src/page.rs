@@ -102,7 +102,6 @@ impl SerializeDeserialize for Page {
             0x01 => PageType::Node(Node::deserialize(input)?),
             0x02 => PageType::Leaf(Leaf::deserialize(input)?),
             0x03 => PageType::Data(Data::deserialize(input)?),
-            // 0x04 => PageType::Raw(Raw::deserialize(input)?),
             _ => return Err(FileError::Pagetype(pagetype)),
         };
 
@@ -147,7 +146,7 @@ impl SerializeDeserialize for Node {
             return Err(FileError::Pagesize(PAGESIZE_NO_HEADER, bytes.len()));
         }
 
-        let (input, (keytype, keys_len)) = (u8(), u8()).parse(bytes)?;
+        let (input, (keys_len, keytype)) = (u8(), u8()).parse(bytes)?;
 
         let keytype = match keytype {
             0x01 => KeyType::String,
@@ -174,7 +173,12 @@ impl SerializeDeserialize for Node {
 
         b.push(0x01);
 
-        b.extend(self.keys.len().to_le_bytes());
+        b.push(
+            self.keys
+                .len()
+                .try_into()
+                .expect("failed to write keys_len"),
+        );
 
         match self.keytype {
             KeyType::String => {
@@ -289,7 +293,7 @@ impl SerializeDeserialize for Leaf {
 
         let (input, pointers) = match keys_len == 0 {
             true => (input, Vec::new()),
-            _ => count(u64(Endianness::Little), keys_len as usize + 1).parse(input)?,
+            _ => count(u64(Endianness::Little), keys_len as usize).parse(input)?,
         };
 
         let (_, next_leaf_pointer) = u64(Endianness::Little).parse(input)?;
@@ -343,6 +347,8 @@ impl SerializeDeserialize for Data {
     fn serialize(self) -> Vec<u8> {
         let mut bytes = Vec::new();
 
+        bytes.push(0x03);
+
         bytes.push(
             self.object
                 .len()
@@ -372,7 +378,11 @@ impl SerializeDeserialize for Data {
         let fields: Result<Vec<Field>, FileError> =
             fields.into_iter().map(|f| Field::deserialize(&f)).collect();
 
-        Ok(Data { object: fields? })
+        if fields.is_err() {
+            println!("LOL")
+        };
+
+        dbg!(Ok(Data { object: fields? }))
     }
 }
 
@@ -414,7 +424,7 @@ impl Field {
 
 impl SerializeDeserialize for Field {
     fn serialize(self) -> Vec<u8> {
-        let mut bytes = Vec::new();
+        let mut bytes: Vec<u8> = Vec::new();
 
         bytes.push(self.key.len().try_into().expect("couldnt parse key len"));
 
@@ -434,9 +444,12 @@ impl SerializeDeserialize for Field {
     }
 
     fn deserialize(bytes: &[u8]) -> Result<Field, FileError> {
+        println!("starting field gaming");
         let (input, key) = length_count(u8(), u8()).parse(bytes)?;
+        println!("key");
 
         let (input, datatype) = u8().parse(input)?;
+        println!("datatype");
 
         let datatype = match datatype {
             0x01 => KeyType::String,
@@ -513,6 +526,82 @@ mod test {
 
         #[test]
         fn deserialize() {}
+    }
+
+    mod datatests {
+        use super::*;
+        use ::std::io::Write;
+
+        #[test]
+        fn serialize() {
+            let data = Data {
+                object: vec![
+                    Field::new(b"foo".to_vec(), KeyType::String, b"bar".to_vec()),
+                    Field::new(
+                        b"test".to_vec(),
+                        KeyType::UInt64,
+                        1234_usize.to_le_bytes().to_vec(),
+                    ),
+                ],
+            };
+
+            let mut expected = vec![
+                0x03, //pagetype
+                0x02, // has 2 fields
+                0x03, b'f', b'o', b'o', // key is 3 chars long, foo
+                0x01, 0x03, b'b', b'a',
+                b'r', // data is of type string and is 3 chars long, bar
+                0x04, b't', b'e', b's', b't', // key is 4 chars long, test
+                0x02, // data is uint64
+            ];
+
+            expected.extend(1234_usize.to_le_bytes());
+
+            let bytes = data.serialize();
+
+            assert_eq!(expected.to_vec(), bytes)
+        }
+
+        #[test]
+        fn deserialize() {
+            let mut bytes = vec![
+                0x03, //pagetype
+                0x02, // has 2 fields
+                0x03, b'f', b'o', b'o', // key is 3 chars long, foo
+                0x01, 0x03, b'b', b'a',
+                b'r', // data is of type string and is 3 chars long, bar
+                0x04, b't', b'e', b's', b't', // key is 4 chars long, test
+                0x02, // data is uint64
+            ];
+            bytes.extend(1234_usize.to_le_bytes()); // data 1234
+
+            let data_expected = Data {
+                object: vec![
+                    Field::new(b"foo".to_vec(), KeyType::String, b"bar".to_vec()),
+                    Field::new(
+                        b"test".to_vec(),
+                        KeyType::UInt64,
+                        1234_usize.to_le_bytes().to_vec(),
+                    ),
+                ],
+            };
+
+            let mut buf = [0x00; PAGESIZE_NO_HEADER];
+            buf[0..bytes.len()].as_mut().write_all(&bytes).unwrap();
+
+            let data = Data::deserialize(&buf);
+
+            if let Ok(data) = data {
+                for (field_expected, field) in data_expected.object.iter().zip(data.object) {
+                    assert_eq!(field_expected.key, field.key);
+                    assert_eq!(field_expected.data, field.data);
+                    assert_eq!(field_expected.datatype, field.datatype);
+                }
+            } else if let Err(e) = data {
+                eprint!("{e}");
+                panic!()
+            }
+        }
     }
 
     mod leaftests {
