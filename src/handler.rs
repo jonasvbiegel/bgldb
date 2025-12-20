@@ -33,7 +33,6 @@ impl<T: Write + Read + Seek> PageHandlerFuncs<T> for PageHandler {
     }
 
     fn get_page(source: &mut T, id: Id) -> Result<Page, HandlerError> {
-        println!("{id}");
         let page = Page::deserialize(&FileHandler::read_page(source, id)?)?;
         Ok(page)
     }
@@ -109,7 +108,6 @@ impl<T: Write + Read + Seek> FileHandlerFuncs<T> for FileHandler {
 
     fn read_page(source: &mut T, id: Id) -> Result<Vec<u8>, FileError> {
         let pos = PAGESIZE + (PAGESIZE * id);
-        println!("{pos}");
         let mut buf: [u8; PAGESIZE as usize] = [0x00; PAGESIZE as usize];
         source.seek(SeekFrom::Start(pos))?;
         source.read_exact(&mut buf)?;

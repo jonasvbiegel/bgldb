@@ -349,12 +349,7 @@ impl SerializeDeserialize for Data {
 
         bytes.push(0x03);
 
-        bytes.push(
-            self.object
-                .len()
-                .try_into()
-                .expect("couldnt parse object length to u8"),
-        );
+        bytes.push(self.object.len() as u8);
 
         for field in self.object {
             let f = field.serialize();
@@ -371,6 +366,7 @@ impl SerializeDeserialize for Data {
             return Err(FileError::Pagesize(PAGESIZE_NO_HEADER, bytes.len()));
         }
 
+        // TODO: this is wrong, field parsing is super wrong
         let (input, object_len) = u8().parse(bytes)?;
 
         let (_, fields) = count(length_count(u8(), u8()), object_len.into()).parse(input)?;
@@ -378,11 +374,7 @@ impl SerializeDeserialize for Data {
         let fields: Result<Vec<Field>, FileError> =
             fields.into_iter().map(|f| Field::deserialize(&f)).collect();
 
-        if fields.is_err() {
-            println!("LOL")
-        };
-
-        dbg!(Ok(Data { object: fields? }))
+        Ok(Data { object: fields? })
     }
 }
 
@@ -400,6 +392,19 @@ impl Field {
             datatype,
             data,
         }
+    }
+
+    pub fn len(&self) -> usize {
+        let mut size = size_of::<u8>() // size of key
+        + self.key.len() // the key
+        + size_of::<u8>() // size of data type
+        + self.data.len(); // the data
+
+        if self.datatype == KeyType::String {
+            size += 0x01 // size of the data len
+        }
+
+        size
     }
 
     pub fn get_key(&self) -> String {
@@ -426,6 +431,12 @@ impl SerializeDeserialize for Field {
     fn serialize(self) -> Vec<u8> {
         let mut bytes: Vec<u8> = Vec::new();
 
+        bytes.push(
+            self.len()
+                .try_into()
+                .expect("couldnt parse length of field"),
+        );
+
         bytes.push(self.key.len().try_into().expect("couldnt parse key len"));
 
         bytes.extend(self.key);
@@ -444,12 +455,9 @@ impl SerializeDeserialize for Field {
     }
 
     fn deserialize(bytes: &[u8]) -> Result<Field, FileError> {
-        println!("starting field gaming");
         let (input, key) = length_count(u8(), u8()).parse(bytes)?;
-        println!("key");
 
         let (input, datatype) = u8().parse(input)?;
-        println!("datatype");
 
         let datatype = match datatype {
             0x01 => KeyType::String,
@@ -548,9 +556,11 @@ mod test {
             let mut expected = vec![
                 0x03, //pagetype
                 0x02, // has 2 fields
+                0x09, // size of field
                 0x03, b'f', b'o', b'o', // key is 3 chars long, foo
                 0x01, 0x03, b'b', b'a',
                 b'r', // data is of type string and is 3 chars long, bar
+                0x0E, // size of field
                 0x04, b't', b'e', b's', b't', // key is 4 chars long, test
                 0x02, // data is uint64
             ];
@@ -565,11 +575,12 @@ mod test {
         #[test]
         fn deserialize() {
             let mut bytes = vec![
-                0x03, //pagetype
                 0x02, // has 2 fields
+                0x09, // size of field
                 0x03, b'f', b'o', b'o', // key is 3 chars long, foo
                 0x01, 0x03, b'b', b'a',
                 b'r', // data is of type string and is 3 chars long, bar
+                0x0E, // size of field
                 0x04, b't', b'e', b's', b't', // key is 4 chars long, test
                 0x02, // data is uint64
             ];
