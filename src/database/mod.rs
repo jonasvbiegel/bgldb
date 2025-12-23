@@ -1,6 +1,8 @@
-use crate::handler::*;
-use crate::page::*;
+pub mod handler;
+pub mod page;
 
+use crate::database::handler::*;
+use crate::database::page::*;
 use std::io::{Read, Seek, Write};
 use std::ops::Index;
 
@@ -98,6 +100,11 @@ impl<T: Read + Write + Seek> DatabaseBuilder<T> {
                     KeyType::UInt64,
                     22_usize.to_le_bytes().to_vec(),
                 ),
+                Field::new(
+                    b"weight".to_vec(),
+                    KeyType::UInt64,
+                    87_usize.to_le_bytes().to_vec(),
+                ),
             ],
         });
 
@@ -108,6 +115,7 @@ impl<T: Read + Write + Seek> DatabaseBuilder<T> {
                     KeyType::UInt64,
                     2_usize.to_le_bytes().to_vec(),
                 ),
+                Field::new(b"cpr".to_vec(), KeyType::String, b"0101009999".to_vec()),
                 Field::new(b"name".to_vec(), KeyType::String, b"thea".to_vec()),
                 Field::new(
                     b"age".to_vec(),

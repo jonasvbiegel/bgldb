@@ -1,4 +1,4 @@
-use crate::page::*;
+use crate::database::page::*;
 use std::io::SeekFrom;
 use std::io::{Read, Seek, Write};
 use thiserror::Error;
