@@ -1,6 +1,6 @@
+use nom::Parser;
 use nom::multi::{count, length_count};
 use nom::number::{Endianness, u8, u64};
-use nom::{ExtendInto, Parser};
 use thiserror::Error;
 
 // NOTE: LITTLE ENDIAN BYTES
@@ -316,13 +316,17 @@ impl Data {
     pub fn json(&self) -> String {
         let mut json = "{\n".to_string();
 
-        for field in &self.object {
+        for (idx, field) in self.object.iter().enumerate() {
             json.push_str("    ");
-            json.push_str(&field.get_key());
+            // json.push_str("\"{}\""&field.get_key());
+            json.push_str(format!("\"{}\"", &field.get_key()).as_str());
             json.push_str(": ");
             match field.datatype {
                 KeyType::String => json.push_str(format!("\"{}\"", field.get_data()).as_str()),
                 KeyType::UInt64 => json.push_str(&field.get_data()),
+            }
+            if idx != self.object.len() - 1 {
+                json.push(',');
             }
             json.push('\n');
         }
