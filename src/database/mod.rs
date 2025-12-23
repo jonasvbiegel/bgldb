@@ -1,5 +1,6 @@
 pub mod handler;
 pub mod page;
+pub use crate::database::page::Data;
 
 use crate::database::handler::*;
 use crate::database::page::*;
