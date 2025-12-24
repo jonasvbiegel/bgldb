@@ -21,6 +21,7 @@ pub struct Header {
     pub elements: u64,
     pub keytype: KeyType,
     pub keytype_size: u8,
+    pub key: Vec<u8>,
     pub root: Id,
     pub order: u8,
 }
@@ -31,10 +32,11 @@ impl SerializeDeserialize for Header {
             return Err(FileError::Pagesize(PAGESIZE as usize, bytes.len()));
         }
 
-        let (_, (elements, keytype, keytype_size, root, order)) = (
+        let (_, (elements, keytype, keytype_size, key, root, order)) = (
             u64(Endianness::Little),
             u8(),
             u8(),
+            length_count(u8(), u8()),
             u64(Endianness::Little),
             u8(),
         )
@@ -50,6 +52,7 @@ impl SerializeDeserialize for Header {
             elements,
             keytype,
             keytype_size,
+            key,
             root,
             order,
         })
@@ -71,6 +74,10 @@ impl SerializeDeserialize for Header {
             }
         }
 
+        b.push(self.key.len().try_into().expect("couldnt parse key len"));
+
+        b.extend(self.key);
+
         b.extend(self.root.to_le_bytes());
 
         b.push(self.order);
@@ -88,6 +95,25 @@ const PAGESIZE_NO_HEADER: usize = PAGESIZE as usize - ID_SIZE - PAGETYPE_SIZE;
 pub struct Page {
     pub id: Id,
     pub pagetype: PageType,
+}
+
+impl Page {
+    pub fn split(&mut self, new_id: Id) -> Result<Page, FileError> {
+        let new_page = match &mut self.pagetype {
+            PageType::Node(node) => Page {
+                id: new_id,
+                pagetype: PageType::Node(node.split()),
+            },
+            PageType::Leaf(leaf) => Page {
+                id: new_id,
+                pagetype: PageType::Leaf(leaf.split()),
+            },
+            // TODO: return error,
+            _ => todo!(),
+        };
+
+        Ok(new_page)
+    }
 }
 
 impl SerializeDeserialize for Page {
@@ -137,6 +163,22 @@ impl Node {
             keys: Vec::new(),
             pointers: Vec::new(),
         }
+    }
+
+    pub fn split(&mut self) -> Node {
+        let mut new_node = Node::new(self.keytype);
+
+        for _ in self.keys.len() / 2..self.keys.len() {
+            new_node.keys.push(self.keys.pop().unwrap());
+        }
+        new_node.keys.reverse();
+
+        for _ in self.pointers.len().div_ceil(2)..self.pointers.len() {
+            new_node.pointers.push(self.pointers.pop().unwrap());
+        }
+        new_node.pointers.reverse();
+
+        new_node
     }
 }
 
@@ -220,6 +262,22 @@ impl Leaf {
             pointers: Vec::new(),
             next_leaf_pointer: 0,
         }
+    }
+
+    pub fn split(&mut self) -> Leaf {
+        let mut new_leaf = Leaf::new(self.keytype);
+
+        for _ in self.keys.len() / 2..self.keys.len() {
+            new_leaf.keys.push(self.keys.pop().unwrap());
+            new_leaf.pointers.push(self.pointers.pop().unwrap());
+        }
+
+        if !new_leaf.keys.is_sorted() && !new_leaf.pointers.is_sorted() {
+            new_leaf.keys.reverse();
+            new_leaf.pointers.reverse();
+        }
+
+        new_leaf
     }
 
     fn from_node(node: Node) -> Leaf {
@@ -318,7 +376,6 @@ impl Data {
 
         for (idx, field) in self.object.iter().enumerate() {
             json.push_str("    ");
-            // json.push_str("\"{}\""&field.get_key());
             json.push_str(format!("\"{}\"", &field.get_key()).as_str());
             json.push_str(": ");
             match field.datatype {
@@ -336,10 +393,27 @@ impl Data {
         json
     }
 
-    pub fn get_key(&self, key: String) -> Option<&Field> {
-        if let Some(field) = self.object.iter().find(|field| {
-            String::from_utf8(field.key.clone()).expect("couldnt parse key to string") == key
-        }) {
+    pub fn is_valid(&self) -> bool {
+        for field in &self.object {
+            match field.datatype {
+                KeyType::UInt64 => {
+                    if field.key.len() != 8 {
+                        return false;
+                    }
+                }
+                KeyType::String => {
+                    if String::from_utf8(field.key.clone()).is_err() {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        true
+    }
+
+    pub fn get_field(&self, key: &[u8]) -> Option<&Field> {
+        if let Some(field) = self.object.iter().find(|field| field.key == key) {
             Some(field)
         } else {
             None
@@ -386,7 +460,7 @@ impl SerializeDeserialize for Data {
 pub struct Field {
     key: Vec<u8>,
     datatype: KeyType,
-    data: Vec<u8>,
+    pub data: Vec<u8>,
 }
 
 impl Field {

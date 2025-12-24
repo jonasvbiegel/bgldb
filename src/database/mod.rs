@@ -4,6 +4,7 @@ pub use crate::database::page::Data;
 
 use crate::database::handler::*;
 use crate::database::page::*;
+use std::collections::VecDeque;
 use std::io::{Read, Seek, Write};
 use std::ops::Index;
 
@@ -11,6 +12,7 @@ pub struct DatabaseBuilder<T: Read + Write + Seek> {
     source: T,
     key: Vec<u8>,
     keytype: KeyTypeSize,
+    order: usize,
 }
 
 impl<T: Read + Write + Seek> DatabaseBuilder<T> {
@@ -19,6 +21,7 @@ impl<T: Read + Write + Seek> DatabaseBuilder<T> {
             source,
             key: Vec::new(),
             keytype: KeyTypeSize::Identity,
+            order: 0,
         }
     }
 
@@ -32,16 +35,22 @@ impl<T: Read + Write + Seek> DatabaseBuilder<T> {
         self
     }
 
+    pub fn order(mut self, order: usize) -> DatabaseBuilder<T> {
+        self.order = order;
+        self
+    }
+
     pub fn build(self) -> Database<T> {
         let mut db = Database {
             source: self.source,
             key: self.key,
             keytype: self.keytype.keytype(),
             keytype_size: self.keytype.size(),
+            order: self.order,
             root: 0,
         };
 
-        db.init();
+        db.init_header();
 
         db
     }
@@ -239,25 +248,27 @@ pub struct Database<T: Read + Write + Seek> {
     key: Vec<u8>,
     keytype: KeyType,
     keytype_size: u8,
+    order: usize,
     root: usize,
 }
 
 impl<T: Read + Write + Seek> Database<T> {
-    pub fn new(source: T, key: &str, keytype: KeyType, keytype_size: u8) -> Database<T> {
-        Database {
-            source,
-            key: key.bytes().collect(),
-            keytype,
-            keytype_size,
-            root: 0,
-        }
-    }
+    // pub fn new(source: T, key: &str, keytype: KeyType, keytype_size: u8) -> Database<T> {
+    //     Database {
+    //         source,
+    //         key: key.bytes().collect(),
+    //         keytype,
+    //         keytype_size,
+    //         root: 0,
+    //     }
+    // }
 
-    pub fn init(&mut self) {
+    pub fn init_header(&mut self) {
         let header = Header {
             elements: 0,
             keytype: self.keytype,
             keytype_size: self.keytype_size,
+            key: self.key.clone(),
 
             // this should be dynamic going forward, determined by keytype size
             order: 4,
@@ -277,45 +288,64 @@ impl<T: Read + Write + Seek> Database<T> {
         PageHandler::get_page(&mut self.source, root_id)
     }
 
-    fn insert_key(&mut self, key: Vec<u8>) -> Data {
-        todo!()
-    }
-
-    // takes data in the future
-    fn insert(&mut self, key: &str) -> bool {
-        let mut page = match dbg!(PageHandler::get_page(
-            &mut self.source,
-            self.root.try_into().unwrap()
-        )) {
-            Ok(page) => page,
-            Err(e) => {
-                return false;
-            }
-        };
-
-        match page.pagetype {
-            PageType::Leaf(ref mut leaf) => match leaf.keytype {
-                KeyType::String => {
-                    let mut vec: Vec<u8> = Vec::new();
-                    key.bytes().for_each(|byte| vec.push(byte));
-                    leaf.keys.push(vec);
-                }
-                KeyType::UInt64 => {
-                    if let Ok(v) = key.parse::<usize>() {
-                        let mut vec: Vec<u8> = Vec::new();
-                        v.to_le_bytes().iter().for_each(|byte| vec.push(*byte));
-                        leaf.keys.push(vec);
-                    } else {
-                        return false;
-                    }
-                }
-            },
-            _ => return false,
+    pub fn insert(&mut self, data: Data) -> Result<(), HandlerError> {
+        if !data.is_valid() {
+            // TODO: return error regarding undefined data
+            todo!()
         }
 
-        PageHandler::write(&mut self.source, page).expect("couldnt write page");
+        if let Some(field) = data.get_field(&self.key) {
+            let mut nodestack = VecDeque::new();
 
-        true
+            let mut current_node = self.get_root()?;
+
+            while let PageType::Node(ref node) = current_node.pagetype {
+                let child_id = if let Some(idx) =
+                    node.keys.iter().position(|node_key| *node_key > field.data)
+                {
+                    node.pointers.index(idx)
+                } else {
+                    node.pointers.last().unwrap()
+                };
+
+                nodestack.push_front(node.clone());
+                current_node = PageHandler::get_page(&mut self.source, *child_id)?;
+            }
+
+            if let PageType::Leaf(mut leaf) = current_node.pagetype {
+                if leaf.keys.contains(&field.data) {
+                    // TODO: return error, db already contains this key
+                    todo!()
+                }
+
+                let data_page =
+                    PageHandler::new_page(&mut self.source, PageType::Leaf(leaf.clone()))?;
+
+                if let Some(idx) = leaf.keys.iter().position(|leaf_key| *leaf_key > field.data) {
+                    leaf.keys.insert(idx, field.data.clone());
+                    leaf.pointers.insert(idx, data_page.id);
+                } else {
+                    leaf.keys.push(field.data.clone());
+                    leaf.pointers.push(data_page.id);
+                }
+
+                if leaf.pointers.len() > self.order {
+                    let split = leaf.split();
+
+                    if let Some(parent) = nodestack.pop_front() {
+                        // TODO: split logic, look at slotmap implementation
+                        todo!()
+                    }
+                }
+
+                todo!()
+            }
+        } else {
+            // TODO: return error regarding data not having the required key
+            todo!()
+        }
+
+        todo!();
     }
 
     pub fn get(&mut self, key: &[u8]) -> Result<Data, HandlerError> {

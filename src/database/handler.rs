@@ -10,6 +10,7 @@ pub trait PageHandlerFuncs<T: Write + Read + Seek> {
     fn new_page(source: &mut T, pagetype: PageType) -> Result<Page, HandlerError>;
     fn get_page(source: &mut T, id: Id) -> Result<Page, HandlerError>;
     fn write(source: &mut T, page: Page) -> Result<(), HandlerError>;
+    fn split(source: &mut T, id: Id) -> Result<Page, HandlerError>;
 }
 
 pub struct PageHandler;
@@ -40,6 +41,16 @@ impl<T: Write + Read + Seek> PageHandlerFuncs<T> for PageHandler {
     fn write(source: &mut T, page: Page) -> Result<(), HandlerError> {
         FileHandler::write_page(source, page.id, &page.serialize())?;
         Ok(())
+    }
+
+    fn split(source: &mut T, id: Id) -> Result<Page, HandlerError> {
+        let mut page = Self::get_page(source, id)?;
+
+        let new_page_id = FileHandler::new_page(source)?;
+
+        let split_page = page.split(new_page_id)?;
+
+        Ok(split_page)
     }
 }
 
@@ -222,6 +233,7 @@ mod test {
                 Header {
                     root: 0,
                     order: 4,
+                    key: b"test".to_vec(),
                     keytype: KeyType::UInt64,
                     elements: 0,
                     keytype_size: 8,
@@ -252,6 +264,7 @@ mod test {
                 Header {
                     root: 0,
                     order: 4,
+                    key: b"test".to_vec(),
                     keytype: KeyType::UInt64,
                     elements: 0,
                     keytype_size: 8,
@@ -285,6 +298,7 @@ mod test {
                 Header {
                     root: 0,
                     order: 4,
+                    key: b"test".to_vec(),
                     keytype: KeyType::UInt64,
                     elements: 0,
                     keytype_size: 8,
