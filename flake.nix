@@ -14,7 +14,6 @@
         devShell = pkgs.mkShell {
           buildInputs = with pkgs; [
             rustup
-            typst
           ];
         };
       }
