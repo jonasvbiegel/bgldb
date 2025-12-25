@@ -7,6 +7,7 @@ use crate::database::page::*;
 use std::collections::VecDeque;
 use std::io::{Read, Seek, Write};
 use std::ops::Index;
+use thiserror::Error;
 
 pub struct DatabaseBuilder<T: Read + Write + Seek> {
     source: T,
@@ -348,7 +349,7 @@ impl<T: Read + Write + Seek> Database<T> {
         todo!();
     }
 
-    pub fn get(&mut self, key: &[u8]) -> Result<Data, HandlerError> {
+    pub fn get(&mut self, key: &[u8]) -> Result<Data, DatabaseError> {
         let mut current_node = self.get_root().expect("couldnt get root");
 
         while let PageType::Node(ref node) = current_node.pagetype {
@@ -373,19 +374,37 @@ impl<T: Read + Write + Seek> Database<T> {
             {
                 leaf.pointers.index(idx)
             } else {
-                // TODO: implement error
-                println!("FUCK");
-                todo!()
+                return Err(DatabaseError::NotFound(
+                    String::from_utf8(key.to_vec()).expect("couldnt parse key"),
+                ));
             };
 
             let data = PageHandler::get_page(&mut self.source, *pointer_id)?;
             match data.pagetype {
                 PageType::Data(data) => Ok(data),
-                _ => todo!(), // TODO: implement error
+                _ => Err(DatabaseError::UnexpectedPagetype(
+                    "data".to_string(),
+                    "something else".to_string(),
+                )),
             }
         } else {
             // TODO: implement error
-            todo!()
+            Err(DatabaseError::UnexpectedPagetype(
+                "leaf".to_string(),
+                "node".to_string(),
+            ))
         }
     }
+}
+
+#[derive(Debug, Error)]
+pub enum DatabaseError {
+    #[error("not found ({0})")]
+    NotFound(String),
+
+    #[error("expected {0}, found {1}")]
+    UnexpectedPagetype(String, String),
+
+    #[error("handler error: {0}")]
+    FileHandlerError(#[from] HandlerError),
 }

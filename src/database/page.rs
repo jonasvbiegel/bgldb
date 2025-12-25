@@ -1,6 +1,7 @@
 use nom::Parser;
 use nom::multi::{count, length_count};
 use nom::number::{Endianness, u8, u64};
+use serde::ser::{Serialize, SerializeMap, SerializeSeq, SerializeStruct, Serializer};
 use thiserror::Error;
 
 // NOTE: LITTLE ENDIAN BYTES
@@ -370,12 +371,35 @@ pub struct Data {
     pub object: Vec<Field>,
 }
 
+impl Serialize for Data {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut map = serializer.serialize_map(Some(self.object.len()))?;
+
+        for field in &self.object {
+            map.serialize_key(&String::from_utf8(field.key.clone()).expect("couldnt parse key"))?;
+            map.serialize_value(&usize::from_le_bytes(
+                field.data.clone().try_into().unwrap(),
+            ))?;
+        }
+
+        map.end()
+    }
+}
+
 impl Data {
+    // pub fn json(&self) -> String {
+    //     todo!()
+    //
+    //
+    // }
+
     pub fn json(&self) -> String {
-        let mut json = "{\n".to_string();
+        let mut json = "{".to_string();
 
         for (idx, field) in self.object.iter().enumerate() {
-            json.push_str("    ");
             json.push_str(format!("\"{}\"", &field.get_key()).as_str());
             json.push_str(": ");
             match field.datatype {
@@ -385,7 +409,6 @@ impl Data {
             if idx != self.object.len() - 1 {
                 json.push(',');
             }
-            json.push('\n');
         }
 
         json.push('}');
