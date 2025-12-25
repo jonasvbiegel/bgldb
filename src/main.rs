@@ -1,11 +1,14 @@
 mod database;
 
-use crate::database::{DatabaseBuilder, KeyTypeSize};
-use axum::body::Body;
-use axum::extract::Path;
-use axum::http::{HeaderValue, Response};
-use axum::response::IntoResponse;
-use axum::{Router, routing::get};
+use crate::database::{DatabaseBuilder, KeyTypeSize, page::Header};
+use axum::{
+    Router,
+    body::Body,
+    extract::Path,
+    http::{Response, StatusCode},
+    response::IntoResponse,
+    routing::get,
+};
 use std::error::Error;
 use std::io::Cursor;
 
@@ -27,13 +30,19 @@ async fn get_data(Path(id): Path<usize>) -> impl IntoResponse {
         .keytype(KeyTypeSize::Identity)
         .build_mock_u64();
 
-    let found = db
-        .get(&id.to_le_bytes())
-        .expect("TODO: implement error handling");
+    let found = db.get(&id.to_le_bytes());
 
-    let mut res = Response::new(Body::from(found.json()));
-    res.headers_mut()
-        .insert("Content-Type", HeaderValue::from_static("application/json"));
-
-    res
+    if let Ok(data) = found {
+        Response::builder()
+            .status(StatusCode::OK)
+            .header("Content-Type", "application/json")
+            .body(Body::from(data.json()))
+            .unwrap()
+    } else {
+        Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .header("Content-Type", "text/plain")
+            .body(Body::from("key not found"))
+            .unwrap()
+    }
 }
