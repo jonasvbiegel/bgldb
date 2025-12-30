@@ -1,6 +1,8 @@
 mod database;
+mod databasehandler;
 
-use crate::database::{Database, DatabaseBuilder, KeyTypeSize};
+use databasehandler::DatabaseHandler;
+
 use axum::{
     Router,
     body::Body,
@@ -8,17 +10,15 @@ use axum::{
     http::{Response, StatusCode},
     routing::get,
 };
+use std::sync::Arc;
 use std::{error::Error, sync::Mutex};
-use std::{
-    fs::{File, OpenOptions},
-    sync::Arc,
-};
+use tokio::net::TcpListener;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     println!("hosting on localhost:8000");
 
-    let state = Arc::new(Mutex::new(DatabaseApi::new()));
+    let state = Arc::new(Mutex::new(DatabaseHandler::new()));
     let address = "localhost:8000".to_string();
 
     let app = Router::new()
@@ -26,7 +26,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .route("/", get("bgldb"))
         .with_state(state);
 
-    let listener = tokio::net::TcpListener::bind(address).await.unwrap();
+    let listener = TcpListener::bind(address).await.unwrap();
 
     axum::serve(listener, app).await.unwrap();
 
@@ -34,49 +34,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
 }
 
 async fn get_data(
-    State(handler): State<Arc<Mutex<DatabaseApi>>>,
+    State(handler): State<Arc<Mutex<DatabaseHandler>>>,
     Path(key): Path<usize>,
 ) -> Response<Body> {
-    handler.lock().unwrap().get_data(key)
-}
-
-struct DatabaseApi {
-    db: Database<File>,
-}
-
-impl DatabaseApi {
-    fn new() -> DatabaseApi {
-        let file = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .open("database.db")
-            .unwrap();
-
-        let db = DatabaseBuilder::new(file)
-            .key(b"id".to_vec())
-            .keytype(KeyTypeSize::Identity)
-            .build_mock_u64();
-
-        DatabaseApi { db }
-    }
-
-    fn get_data(&mut self, key: usize) -> Response<Body> {
-        let found = self.db.get(&key.to_le_bytes());
-
-        if let Ok(data) = found {
-            Response::builder()
-                .status(StatusCode::OK)
-                .header("Content-Type", "application/json")
-                .body(Body::from(data.json()))
-                .unwrap()
-        } else {
-            Response::builder()
-                .status(StatusCode::NOT_FOUND)
-                .header("Content-Type", "text/plain")
-                .body(Body::from("key not found"))
-                .unwrap()
-        }
+    if let Ok(mut locked) = handler.lock() {
+        locked.get_data(key)
+    } else {
+        Response::builder()
+            .status(StatusCode::LOCKED)
+            .header("Content-Type", "text/plain")
+            .body(Body::from("database is locked"))
+            .unwrap()
     }
 }
