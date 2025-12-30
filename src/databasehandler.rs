@@ -1,11 +1,9 @@
-use std::fs::{File, OpenOptions};
-
+use crate::database::{Database, DatabaseBuilder, KeyTypeSize};
 use axum::{
     body::Body,
     http::{Response, StatusCode},
 };
-
-use crate::database::{Database, DatabaseBuilder, KeyTypeSize};
+use std::fs::{File, OpenOptions};
 
 pub struct DatabaseHandler {
     db: Database<File>,

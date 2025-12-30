@@ -18,13 +18,13 @@ use tokio::net::TcpListener;
 async fn main() -> Result<(), Box<dyn Error>> {
     println!("hosting on localhost:8000");
 
-    let state = Arc::new(Mutex::new(DatabaseHandler::new()));
+    let database = Arc::new(Mutex::new(DatabaseHandler::new()));
     let address = "localhost:8000".to_string();
 
     let app = Router::new()
         .route("/{*key}", get(get_data))
         .route("/", get("bgldb"))
-        .with_state(state);
+        .with_state(database);
 
     let listener = TcpListener::bind(address).await.unwrap();
 
