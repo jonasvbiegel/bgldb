@@ -1,7 +1,7 @@
 use nom::Parser;
 use nom::multi::{count, length_count};
 use nom::number::{Endianness, u8, u64};
-use serde::ser::{Serialize, SerializeMap, SerializeSeq, SerializeStruct, Serializer};
+use serde::ser::{Serialize, SerializeMap, Serializer};
 use thiserror::Error;
 
 // NOTE: LITTLE ENDIAN BYTES

@@ -1,4 +1,4 @@
-use crate::database::{Database, DatabaseBuilder, KeyTypeSize};
+use crate::database::{Database, DatabaseBuilder, KeyTypeSize, page::KeyType};
 use axum::{
     body::Body,
     http::{Response, StatusCode},
@@ -21,16 +21,20 @@ impl DatabaseHandler {
 
         let db = DatabaseBuilder::new(file)
             .key(b"id".to_vec())
-            .keytype(KeyTypeSize::Identity)
+            .keytype(KeyTypeSize::UInt64)
             .build_mock_u64();
 
         DatabaseHandler { db }
     }
 
-    pub fn get_data(&mut self, key: usize) -> Response<Body> {
-        let found = self.db.get(&key.to_le_bytes());
+    pub fn get_keytype(&mut self) -> KeyType {
+        self.db.get_keytype().unwrap()
+    }
 
-        if let Ok(data) = found {
+    pub fn get_data(&mut self, key: &[u8]) -> Response<Body> {
+        let found = self.db.get(key);
+
+        if let Ok(Some(data)) = found {
             Response::builder()
                 .status(StatusCode::OK)
                 .header("Content-Type", "application/json")

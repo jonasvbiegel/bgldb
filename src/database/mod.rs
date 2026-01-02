@@ -21,7 +21,7 @@ impl<T: Read + Write + Seek> DatabaseBuilder<T> {
         DatabaseBuilder {
             source,
             key: Vec::new(),
-            keytype: KeyTypeSize::Identity,
+            keytype: KeyTypeSize::UInt64,
             order: 0,
         }
     }
@@ -221,7 +221,6 @@ impl<T: Read + Write + Seek> DatabaseBuilder<T> {
 }
 
 pub enum KeyTypeSize {
-    Identity,
     String(u8),
     UInt64,
 }
@@ -229,7 +228,6 @@ pub enum KeyTypeSize {
 impl KeyTypeSize {
     fn size(&self) -> u8 {
         match self {
-            KeyTypeSize::Identity => 8,
             KeyTypeSize::String(n) => *n,
             KeyTypeSize::UInt64 => 8,
         }
@@ -237,7 +235,6 @@ impl KeyTypeSize {
 
     fn keytype(&self) -> KeyType {
         match self {
-            KeyTypeSize::Identity => KeyType::UInt64,
             KeyTypeSize::String(_) => KeyType::String,
             KeyTypeSize::UInt64 => KeyType::UInt64,
         }
@@ -254,16 +251,6 @@ pub struct Database<T: Read + Write + Seek> {
 }
 
 impl<T: Read + Write + Seek> Database<T> {
-    // pub fn new(source: T, key: &str, keytype: KeyType, keytype_size: u8) -> Database<T> {
-    //     Database {
-    //         source,
-    //         key: key.bytes().collect(),
-    //         keytype,
-    //         keytype_size,
-    //         root: 0,
-    //     }
-    // }
-
     pub fn init_header(&mut self) {
         let header = Header {
             elements: 0,
@@ -283,12 +270,17 @@ impl<T: Read + Write + Seek> Database<T> {
         let _ = PageHandler::new_page(&mut self.source, PageType::Leaf(leaf));
     }
 
+    pub fn get_keytype(&mut self) -> Result<KeyType, HandlerError> {
+        Ok(HeaderHandler::get(&mut self.source)?.keytype)
+    }
+
     fn get_root(&mut self) -> Result<Page, HandlerError> {
         let root_id = HeaderHandler::get(&mut self.source)?.root;
 
         PageHandler::get_page(&mut self.source, root_id)
     }
 
+    #[allow(dead_code)]
     pub fn insert(&mut self, data: Data) -> Result<(), HandlerError> {
         if !data.is_valid() {
             // TODO: return error regarding undefined data
@@ -349,7 +341,7 @@ impl<T: Read + Write + Seek> Database<T> {
         todo!();
     }
 
-    pub fn get(&mut self, key: &[u8]) -> Result<Data, DatabaseError> {
+    pub fn get(&mut self, key: &[u8]) -> Result<Option<Data>, DatabaseError> {
         let mut current_node = self.get_root().expect("couldnt get root");
 
         while let PageType::Node(ref node) = current_node.pagetype {
@@ -374,14 +366,15 @@ impl<T: Read + Write + Seek> Database<T> {
             {
                 leaf.pointers.index(idx)
             } else {
-                return Err(DatabaseError::NotFound(
-                    String::from_utf8(key.to_vec()).expect("couldnt parse key"),
-                ));
+                return Ok(None);
+                // return Err(DatabaseError::NotFound(
+                //     String::from_utf8(key.to_vec()).expect("couldnt parse key"),
+                // ));
             };
 
             let data = PageHandler::get_page(&mut self.source, *pointer_id)?;
             match data.pagetype {
-                PageType::Data(data) => Ok(data),
+                PageType::Data(data) => Ok(Some(data)),
                 _ => Err(DatabaseError::UnexpectedPagetype(
                     "data".to_string(),
                     "something else".to_string(),
@@ -399,9 +392,6 @@ impl<T: Read + Write + Seek> Database<T> {
 
 #[derive(Debug, Error)]
 pub enum DatabaseError {
-    #[error("not found ({0})")]
-    NotFound(String),
-
     #[error("expected {0}, found {1}")]
     UnexpectedPagetype(String, String),
 
