@@ -367,9 +367,6 @@ impl<T: Read + Write + Seek> Database<T> {
                 leaf.pointers.index(idx)
             } else {
                 return Ok(None);
-                // return Err(DatabaseError::NotFound(
-                //     String::from_utf8(key.to_vec()).expect("couldnt parse key"),
-                // ));
             };
 
             let data = PageHandler::get_page(&mut self.source, *pointer_id)?;
@@ -381,7 +378,6 @@ impl<T: Read + Write + Seek> Database<T> {
                 )),
             }
         } else {
-            // TODO: implement error
             Err(DatabaseError::UnexpectedPagetype(
                 "leaf".to_string(),
                 "node".to_string(),
