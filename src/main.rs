@@ -64,9 +64,9 @@ async fn operation(
                     }
                 } else {
                     (
-                        StatusCode::LOCKED,
+                        StatusCode::INTERNAL_SERVER_ERROR,
                         [(header::CONTENT_TYPE, "text/plain".to_string())],
-                        "database is locked".to_string(),
+                        "fatal database error".to_string(),
                     )
                 }
             }
