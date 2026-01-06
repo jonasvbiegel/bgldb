@@ -8,10 +8,6 @@ use thiserror::Error;
 const PAGESIZE: u64 = 4096;
 type Id = u64;
 
-// NOTE: still need to figure out data handling
-// maybe we should just always parse to raw, and then in the end parse all raws to a data struct?
-// this could still work with the Data and Raw struct
-
 pub trait SerializeDeserialize: Sized {
     fn serialize(self) -> Vec<u8>;
     fn deserialize(bytes: &[u8]) -> Result<Self, FileError>;
@@ -371,31 +367,7 @@ pub struct Data {
     pub object: Vec<Field>,
 }
 
-impl Serialize for Data {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut map = serializer.serialize_map(Some(self.object.len()))?;
-
-        for field in &self.object {
-            map.serialize_key(&String::from_utf8(field.key.clone()).expect("couldnt parse key"))?;
-            map.serialize_value(&usize::from_le_bytes(
-                field.data.clone().try_into().unwrap(),
-            ))?;
-        }
-
-        map.end()
-    }
-}
-
 impl Data {
-    // pub fn json(&self) -> String {
-    //     todo!()
-    //
-    //
-    // }
-
     pub fn json(&self) -> String {
         let mut json = "{".to_string();
 
