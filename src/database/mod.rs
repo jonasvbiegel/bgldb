@@ -281,7 +281,7 @@ impl<T: Read + Write + Seek> Database<T> {
     }
 
     #[allow(dead_code)]
-    pub fn insert(&mut self, data: Data) -> Result<(), HandlerError> {
+    pub fn insert(&mut self, data: Data) -> Result<(), DatabaseError> {
         if !data.is_valid() {
             // TODO: return error regarding undefined data - invalid string or invalind u64 for
             // some reason
@@ -307,6 +307,8 @@ impl<T: Read + Write + Seek> Database<T> {
                 current_node = PageHandler::get_page(&mut self.source, *child_id)?;
             }
 
+            let mut split: Option<Leaf> = None;
+
             if let PageType::Leaf(mut leaf) = current_node.pagetype {
                 if leaf.keys.contains(&field.data) {
                     // TODO: return error, db already contains this key
@@ -325,15 +327,31 @@ impl<T: Read + Write + Seek> Database<T> {
                 }
 
                 if leaf.pointers.len() > self.order {
-                    let split = leaf.split();
-
-                    if let Some(parent) = nodestack.pop_front() {
-                        // TODO: split logic, look at slotmap implementation
-                        todo!()
-                    }
+                    split = Some(leaf.split());
                 }
 
                 todo!()
+            }
+
+            if let Some(split_leaf) = split {
+                // root is leaf
+                if nodestack.is_empty() {
+                    todo!()
+                }
+
+                let old_parent =
+                    PageHandler::get_page(&mut self.source, nodestack.pop_front().unwrap())?;
+
+                while let Some(parent_id) = nodestack.pop_front() {
+                    let PageType::Node(parent) =
+                        PageHandler::get_page(&mut self.source, parent_id)?.pagetype
+                    else {
+                        return Err(DatabaseError::UnexpectedPagetype(
+                            "node".to_string(),
+                            "something else".to_string(),
+                        ));
+                    };
+                }
             }
         } else {
             // TODO: return error regarding data not having the required key
@@ -361,10 +379,6 @@ impl<T: Read + Write + Seek> Database<T> {
         }
 
         if let PageType::Leaf(ref leaf) = current_node.pagetype {
-            // let pointer_id = if let Some(idx) = leaf
-            //     .keys
-            //     .iter()
-            //     .position(|leaf_key| *leaf_key == key.to_vec())
             let pointer_id = if let Ok(idx) = leaf.keys.binary_search(&key.to_vec()) {
                 leaf.pointers.index(idx)
             } else {
