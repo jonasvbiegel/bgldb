@@ -333,6 +333,8 @@ impl<T: Read + Write + Seek> Database<T> {
                 todo!()
             }
 
+            PageHandler::write(&mut self.source, current_node)?;
+
             if let Some(split_leaf) = split {
                 // root is leaf
                 if nodestack.is_empty() {
