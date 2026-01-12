@@ -283,7 +283,8 @@ impl<T: Read + Write + Seek> Database<T> {
     #[allow(dead_code)]
     pub fn insert(&mut self, data: Data) -> Result<(), HandlerError> {
         if !data.is_valid() {
-            // TODO: return error regarding undefined data
+            // TODO: return error regarding undefined data - invalid string or invalind u64 for
+            // some reason
             todo!()
         }
 
@@ -293,10 +294,11 @@ impl<T: Read + Write + Seek> Database<T> {
             let mut current_node = self.get_root()?;
 
             while let PageType::Node(ref node) = current_node.pagetype {
-                let child_id = if let Some(idx) =
-                    node.keys.iter().position(|node_key| *node_key > field.data)
+                let child_id = if let Ok(idx) = &node
+                    .keys
+                    .binary_search_by(|node_key| node_key.cmp(&field.data))
                 {
-                    node.pointers.index(idx)
+                    node.pointers.index(*idx)
                 } else {
                     node.pointers.last().unwrap()
                 };
