@@ -361,11 +361,11 @@ impl<T: Read + Write + Seek> Database<T> {
         }
 
         if let PageType::Leaf(ref leaf) = current_node.pagetype {
-            let pointer_id = if let Some(idx) = leaf
-                .keys
-                .iter()
-                .position(|leaf_key| *leaf_key == key.to_vec())
-            {
+            // let pointer_id = if let Some(idx) = leaf
+            //     .keys
+            //     .iter()
+            //     .position(|leaf_key| *leaf_key == key.to_vec())
+            let pointer_id = if let Ok(idx) = leaf.keys.binary_search(&key.to_vec()) {
                 leaf.pointers.index(idx)
             } else {
                 return Ok(None);
