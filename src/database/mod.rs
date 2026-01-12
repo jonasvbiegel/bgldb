@@ -301,7 +301,7 @@ impl<T: Read + Write + Seek> Database<T> {
                     node.pointers.last().unwrap()
                 };
 
-                nodestack.push_front(node.clone());
+                nodestack.push_front(current_node.id);
                 current_node = PageHandler::get_page(&mut self.source, *child_id)?;
             }
 
