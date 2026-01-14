@@ -127,11 +127,11 @@ impl<T: Read + Write + Seek> DatabaseBuilder<T> {
                     2_usize.to_le_bytes().to_vec(),
                 ),
                 Field::new(b"cpr".to_vec(), KeyType::String, b"0101009999".to_vec()),
-                Field::new(b"name".to_vec(), KeyType::String, b"thea".to_vec()),
+                Field::new(b"name".to_vec(), KeyType::String, b"johnny".to_vec()),
                 Field::new(
                     b"age".to_vec(),
                     KeyType::UInt64,
-                    25_usize.to_le_bytes().to_vec(),
+                    30_usize.to_le_bytes().to_vec(),
                 ),
             ],
         });
