@@ -100,11 +100,7 @@ impl<T: Read + Write + Seek> DatabaseBuilder<T> {
 
         let data1 = PageType::Data(Data {
             object: vec![
-                Field::new(
-                    b"id".to_vec(),
-                    KeyType::UInt64,
-                    1_usize.to_le_bytes().to_vec(),
-                ),
+                Field::new(b"id".to_vec(), KeyType::UInt64, b"A".to_vec()),
                 Field::new(b"name".to_vec(), KeyType::String, b"jonas".to_vec()),
                 Field::new(
                     b"age".to_vec(),
@@ -121,11 +117,7 @@ impl<T: Read + Write + Seek> DatabaseBuilder<T> {
 
         let data2 = PageType::Data(Data {
             object: vec![
-                Field::new(
-                    b"id".to_vec(),
-                    KeyType::UInt64,
-                    2_usize.to_le_bytes().to_vec(),
-                ),
+                Field::new(b"id".to_vec(), KeyType::UInt64, b"B".to_vec()),
                 Field::new(b"cpr".to_vec(), KeyType::String, b"0101009999".to_vec()),
                 Field::new(b"name".to_vec(), KeyType::String, b"johnny".to_vec()),
                 Field::new(
@@ -138,11 +130,7 @@ impl<T: Read + Write + Seek> DatabaseBuilder<T> {
 
         let data3 = PageType::Data(Data {
             object: vec![
-                Field::new(
-                    b"id".to_vec(),
-                    KeyType::UInt64,
-                    3_usize.to_le_bytes().to_vec(),
-                ),
+                Field::new(b"id".to_vec(), KeyType::UInt64, b"C".to_vec()),
                 Field::new(b"name".to_vec(), KeyType::String, b"dam".to_vec()),
                 Field::new(
                     b"age".to_vec(),
@@ -154,11 +142,7 @@ impl<T: Read + Write + Seek> DatabaseBuilder<T> {
 
         let data4 = PageType::Data(Data {
             object: vec![
-                Field::new(
-                    b"id".to_vec(),
-                    KeyType::UInt64,
-                    4_usize.to_le_bytes().to_vec(),
-                ),
+                Field::new(b"id".to_vec(), KeyType::UInt64, b"D".to_vec()),
                 Field::new(b"name".to_vec(), KeyType::String, b"lars".to_vec()),
                 Field::new(
                     b"age".to_vec(),
@@ -170,11 +154,7 @@ impl<T: Read + Write + Seek> DatabaseBuilder<T> {
 
         let data5 = PageType::Data(Data {
             object: vec![
-                Field::new(
-                    b"id".to_vec(),
-                    KeyType::UInt64,
-                    5_usize.to_le_bytes().to_vec(),
-                ),
+                Field::new(b"id".to_vec(), KeyType::UInt64, b"E".to_vec()),
                 Field::new(b"name".to_vec(), KeyType::String, b"john".to_vec()),
                 Field::new(
                     b"age".to_vec(),
@@ -186,11 +166,7 @@ impl<T: Read + Write + Seek> DatabaseBuilder<T> {
 
         let data6 = PageType::Data(Data {
             object: vec![
-                Field::new(
-                    b"id".to_vec(),
-                    KeyType::UInt64,
-                    6_usize.to_le_bytes().to_vec(),
-                ),
+                Field::new(b"id".to_vec(), KeyType::UInt64, b"F".to_vec()),
                 Field::new(b"name".to_vec(), KeyType::String, b"hans".to_vec()),
                 Field::new(
                     b"age".to_vec(),
@@ -200,7 +176,130 @@ impl<T: Read + Write + Seek> DatabaseBuilder<T> {
             ],
         });
 
-        // println!("{leaf:#?}");
+        let mut root = db.get_root().unwrap();
+        root.pagetype = node;
+        PageHandler::write(&mut db.source, root).unwrap();
+
+        let _ = PageHandler::new_page(&mut db.source, leaf1);
+        let _ = PageHandler::new_page(&mut db.source, leaf2);
+        let _ = PageHandler::new_page(&mut db.source, leaf3);
+        let _ = PageHandler::new_page(&mut db.source, data1);
+        let _ = PageHandler::new_page(&mut db.source, data2);
+        let _ = PageHandler::new_page(&mut db.source, data3);
+        let _ = PageHandler::new_page(&mut db.source, data4);
+        let _ = PageHandler::new_page(&mut db.source, data5);
+        let _ = PageHandler::new_page(&mut db.source, data6);
+
+        db
+    }
+
+    pub fn build_mock_string(self) -> Database<T> {
+        let mut db = self.build();
+
+        let node = PageType::Node(Node {
+            keytype: KeyType::String,
+            keys: vec!["C".as_bytes().to_vec(), "E".as_bytes().to_vec()],
+            pointers: vec![1, 2, 3],
+        });
+
+        let leaf1 = PageType::Leaf(Leaf {
+            keytype: KeyType::String,
+            keys: vec!["A".as_bytes().to_vec(), "B".as_bytes().to_vec()],
+            pointers: vec![4, 5],
+            next_leaf_pointer: 0,
+        });
+
+        let leaf2 = PageType::Leaf(Leaf {
+            keytype: KeyType::String,
+            keys: vec!["C".as_bytes().to_vec(), "D".as_bytes().to_vec()],
+            pointers: vec![6, 7],
+            next_leaf_pointer: 0,
+        });
+
+        let leaf3 = PageType::Leaf(Leaf {
+            keytype: KeyType::String,
+            keys: vec!["E".as_bytes().to_vec(), "F".as_bytes().to_vec()],
+            pointers: vec![8, 9],
+            next_leaf_pointer: 0,
+        });
+
+        let data1 = PageType::Data(Data {
+            object: vec![
+                Field::new(b"id".to_vec(), KeyType::String, "A".as_bytes().to_vec()),
+                Field::new(b"name".to_vec(), KeyType::String, b"jonas".to_vec()),
+                Field::new(
+                    b"age".to_vec(),
+                    KeyType::UInt64,
+                    22_usize.to_le_bytes().to_vec(),
+                ),
+                Field::new(
+                    b"weight".to_vec(),
+                    KeyType::UInt64,
+                    87_usize.to_le_bytes().to_vec(),
+                ),
+            ],
+        });
+
+        let data2 = PageType::Data(Data {
+            object: vec![
+                Field::new(b"id".to_vec(), KeyType::String, "B".as_bytes().to_vec()),
+                Field::new(b"cpr".to_vec(), KeyType::String, b"0101009999".to_vec()),
+                Field::new(b"name".to_vec(), KeyType::String, b"johnny".to_vec()),
+                Field::new(
+                    b"age".to_vec(),
+                    KeyType::UInt64,
+                    30_usize.to_le_bytes().to_vec(),
+                ),
+            ],
+        });
+
+        let data3 = PageType::Data(Data {
+            object: vec![
+                Field::new(b"id".to_vec(), KeyType::String, "C".as_bytes().to_vec()),
+                Field::new(b"name".to_vec(), KeyType::String, b"dam".to_vec()),
+                Field::new(
+                    b"age".to_vec(),
+                    KeyType::UInt64,
+                    300_usize.to_le_bytes().to_vec(),
+                ),
+            ],
+        });
+
+        let data4 = PageType::Data(Data {
+            object: vec![
+                Field::new(b"id".to_vec(), KeyType::String, "D".as_bytes().to_vec()),
+                Field::new(b"name".to_vec(), KeyType::String, b"lars".to_vec()),
+                Field::new(
+                    b"age".to_vec(),
+                    KeyType::UInt64,
+                    55_usize.to_le_bytes().to_vec(),
+                ),
+            ],
+        });
+
+        let data5 = PageType::Data(Data {
+            object: vec![
+                Field::new(b"id".to_vec(), KeyType::String, "E".as_bytes().to_vec()),
+                Field::new(b"name".to_vec(), KeyType::String, b"john".to_vec()),
+                Field::new(
+                    b"age".to_vec(),
+                    KeyType::UInt64,
+                    55_usize.to_le_bytes().to_vec(),
+                ),
+            ],
+        });
+
+        let data6 = PageType::Data(Data {
+            object: vec![
+                Field::new(b"id".to_vec(), KeyType::String, "F".as_bytes().to_vec()),
+                Field::new(b"name".to_vec(), KeyType::String, b"hans".to_vec()),
+                Field::new(
+                    b"age".to_vec(),
+                    KeyType::UInt64,
+                    55_usize.to_le_bytes().to_vec(),
+                ),
+            ],
+        });
 
         let mut root = db.get_root().unwrap();
         root.pagetype = node;
@@ -393,4 +492,34 @@ pub enum DatabaseError {
 
     #[error("handler error: {0}")]
     FileHandlerError(#[from] HandlerError),
+}
+
+#[cfg(test)]
+mod test {
+    use std::io::Cursor;
+
+    use super::*;
+    #[test]
+    fn test() {
+        let file = vec![0x00; 4096];
+
+        let mut db = DatabaseBuilder::new(Cursor::new(file))
+            .key(b"id".to_vec())
+            .keytype(KeyTypeSize::String(10))
+            .build_mock_string();
+
+        let a = db.get("A".as_bytes()).unwrap().unwrap();
+
+        assert_eq!(a.get_field(b"id").unwrap().get_data(), "A");
+        assert_eq!(a.get_field(b"name").unwrap().get_data(), "jonas");
+        assert_eq!(a.get_field(b"age").unwrap().get_data(), "22");
+        assert_eq!(a.get_field(b"weight").unwrap().get_data(), "87");
+
+        let b = db.get("B".as_bytes()).unwrap().unwrap();
+
+        assert_eq!(b.get_field(b"id").unwrap().get_data(), "B");
+        assert_eq!(b.get_field(b"name").unwrap().get_data(), "johnny");
+        assert_eq!(b.get_field(b"age").unwrap().get_data(), "30");
+        assert_eq!(b.get_field(b"cpr").unwrap().get_data(), "0101009999");
+    }
 }

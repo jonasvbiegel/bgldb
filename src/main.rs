@@ -19,14 +19,15 @@ use tower_http::cors::{Any, CorsLayer};
 async fn main() {
     println!("hosting on localhost:8000");
 
-    let database = Arc::new(Mutex::new(DatabaseHandler::new()));
+    // let database = Arc::new(Mutex::new(DatabaseHandler::new_u64()));
+    let database = Arc::new(Mutex::new(DatabaseHandler::new_string()));
     let address = "localhost:8000".to_string();
 
     let cors = CorsLayer::new().allow_origin(Any);
 
     let app = Router::new()
         .route("/", post(operation))
-        .route("/", get("Hello from bgldb!"))
+        .route("/", get("Hello from bgldb!\n"))
         .with_state(database)
         .layer(cors);
 

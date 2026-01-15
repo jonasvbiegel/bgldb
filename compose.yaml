@@ -2,5 +2,3 @@ services:
   web:
     build: .
     network_mode: "host"
-    ports:
-      - "8000:8000"

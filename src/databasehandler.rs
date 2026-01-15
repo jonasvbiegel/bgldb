@@ -10,12 +10,13 @@ pub struct DatabaseHandler {
 }
 
 impl DatabaseHandler {
-    pub fn new() -> DatabaseHandler {
+    #[allow(dead_code)]
+    pub fn new_u64() -> DatabaseHandler {
         let file = OpenOptions::new()
             .read(true)
             .write(true)
             .create(true)
-            .truncate(false)
+            .truncate(true)
             .open(".db")
             .unwrap();
 
@@ -23,6 +24,24 @@ impl DatabaseHandler {
             .key(b"id".to_vec())
             .keytype(KeyTypeSize::UInt64)
             .build_mock_u64();
+
+        DatabaseHandler { db }
+    }
+
+    #[allow(dead_code)]
+    pub fn new_string() -> DatabaseHandler {
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(".db")
+            .unwrap();
+
+        let db = DatabaseBuilder::new(file)
+            .key(b"id".to_vec())
+            .keytype(KeyTypeSize::String(10))
+            .build_mock_string();
 
         DatabaseHandler { db }
     }
